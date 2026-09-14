@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="pl">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WALKA CZARODZIEJÓW</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="game-shell">
+    <canvas id="gameCanvas" aria-label="Walka czarodziejów"></canvas>
+
+    <section class="auth-screen" id="authScreen">
+      <div class="auth-panel">
+        <div class="eyebrow">WALKA CZARODZIEJÓW // ID GRACZA</div>
+        <h2>WEJDŹ DO<br><em>KRĘGU</em></h2>
+        <div class="auth-tabs">
+          <button id="registerTab" class="active">ZAREJESTRUJ SIĘ</button>
+          <button id="loginTab">ZALOGUJ SIĘ</button>
+        </div>
+        <label class="match-code-label" for="matchCode">KOD POJEDYNKU<input id="matchCode" type="text" maxlength="12" autocomplete="off" placeholder="NP. RUNA42"></label>
+        <form id="registerForm">
+          <label>NICK<input id="registerNick" type="text" maxlength="16" autocomplete="username" required></label>
+          <div class="auth-error" id="registerNickError"></div>
+          <label>HASŁO<input id="registerPassword" type="password" minlength="4" autocomplete="new-password" required></label>
+          <button class="auth-submit" type="submit">UTWÓRZ KONTO <span>→</span></button>
+        </form>
+        <form id="loginForm" class="hidden">
+          <label>NICK<input id="loginNick" type="text" autocomplete="username" required></label>
+          <label>HASŁO<input id="loginPassword" type="password" autocomplete="current-password" required></label>
+          <div class="auth-error" id="loginError"></div>
+          <button class="auth-submit" type="submit">ZALOGUJ SIĘ <span>→</span></button>
+        </form>
+      </div>
+    </section>
+
+    <section class="reveal-screen hidden" id="revealScreen">
+      <div class="reveal-burst"></div>
+      <div class="reveal-card">
+        <div class="eyebrow">NOWY CZARODZIEJ WKRACZA DO ARENY</div>
+        <div class="reveal-mage" id="revealMage">I</div>
+        <div class="reveal-kicker">PRZEDSTAWIAMY</div>
+        <h2 id="revealName">ISKRA</h2>
+        <p id="revealPower">Moc zaklęcia: 12</p>
+        <div class="reveal-line"></div>
+      </div>
+    </section>
+
+    <section class="hud hud-top">
+      <div class="brand-block">
+        <div class="eyebrow">WALKA CZARODZIEJÓW // ARENA</div>
+        <h1>Walka Czarodziejów</h1>
+        <span class="player-name" id="playerName"></span>
+      </div>
+      <div class="mission-block">
+        <span class="label">MISSION</span>
+        <strong id="missionText">DEFEAT YOUR RIVAL</strong>
+        <span class="subtle" id="waveText">DUEL 01 / 01</span>
+      </div>
+      <div class="score-block">
+        <span class="label">ROUND</span>
+        <strong id="scoreText">000000</strong>
+      </div>
+    </section>
+
+    <section class="friends-modal hidden" id="friendsModal">
+      <div class="friends-window">
+        <button id="friendsClose" class="shop-close" type="button">X</button>
+        <div class="eyebrow">ARCANE SOCIAL // GRACZE</div>
+        <h3>ZNAJOMI</h3>
+        <div class="friends-tabs"><button id="friendsTab" class="active" type="button">ZNAJOMI</button><button id="requestsTab" type="button">ZAPROSZENIA</button><button id="suggestionsTab" type="button">SUGESTIE</button></div>
+        <div id="friendsView"><div class="friends-list" id="friendsList"></div></div>
+        <div id="requestsView" class="friends-tab-view hidden"><div class="friend-add-row"><input id="inviteNick" type="text" placeholder="Nick gracza"><button id="sendInviteButton" type="button">WYŚLIJ</button></div><div class="friend-message" id="inviteMessage"></div><div class="friends-empty">WYSŁANE ZAPROSZENIE CZEKA NA AKCEPTACJĘ</div></div>
+        <div id="suggestionsView" class="friends-tab-view hidden"><div class="friends-list" id="suggestionsList"></div></div>
+      </div>
+    </section>
+
+    <section class="hud hud-left">
+      <div class="instrument">
+        <span class="label">MANA</span>
+        <strong><span id="speedText">100</span><small> %</small></strong>
+        <div class="meter"><i id="speedMeter"></i></div>
+      </div>
+      <div class="instrument">
+        <span class="label">WARD</span>
+        <strong><span id="altitudeText">100</span><small> %</small></strong>
+        <div class="meter"><i id="altitudeMeter"></i></div>
+      </div>
+      <div class="radar" id="radar">
+        <span class="radar-ring ring-one"></span>
+        <span class="radar-ring ring-two"></span>
+        <span class="radar-sweep"></span>
+        <span class="radar-you"></span>
+        <div id="radarContacts"></div>
+        <span class="radar-label">ARCANE SIGHT</span>
+      </div>
+    </section>
+
+    <section class="hud hud-right">
+      <div class="aircraft-card">
+        <div>
+          <span class="label">RIVAL</span>
+          <strong id="rivalName">THE BOT</strong>
+          <span class="subtle">EMBER MAGE</span>
+        </div>
+        <div class="aircraft-mark">ARC<br><b>01</b></div>
+      </div>
+      <div class="weapon-card">
+        <span class="label">SPELLBOOK</span>
+        <strong>ARCANE BOLT</strong>
+        <span class="subtle">FOCUS // READY</span>
+        <div class="ammo-row" id="ammoRow"></div>
+      </div>
+      <div class="controls-card">
+        <span class="label">DUEL CONTROL</span>
+        <div><kbd>WASD</kbd><span>MOVE / AIM</span></div>
+        <div><kbd>SPACE</kbd><span>CAST SPELL</span></div>
+        <div><kbd>E</kbd><span>POWER / INVISIBILITY</span></div>
+        <div><kbd>Q</kbd><span>100% SHIELD / 10 SEC</span></div>
+        <div><kbd>ARROWS</kbd><span>MAGE 2</span></div>
+        <div><kbd>ENTER</kbd><span>JOIN DUEL</span></div>
+      </div>
+    </section>
+
+    <div class="crosshair" id="crosshair"><span></span><i></i></div>
+    <div class="target-box" id="targetBox"><span class="target-tag">HOSTILE // <b id="targetDistance">--</b> M</span></div>
+    <div class="hit-marker" id="hitMarker">×</div>
+
+    <section class="status-bar">
+      <div><span class="status-dot"></span><strong id="statusText">ALL SYSTEMS NOMINAL</strong></div>
+      <div class="status-center" id="eventText">CHOOSE YOUR OPPONENT</div>
+      <div id="enemiesText">MAGE 2 WAITING</div>
+    </section>
+
+    <section class="start-screen" id="startScreen">
+      <div class="start-panel">
+        <div class="eyebrow">ARCANE COUNCIL / DUEL CHAMBER</div>
+        <h2>ARCANE<br><em>DUEL</em></h2>
+        <p>Jeden krąg. Dwóch czarodziejów. Traf przeciwnika zaklęciem, zanim rozbije twoją tarczę.</p>
+        <div class="coins-display">SKARBIEC <strong id="coinsText">0</strong> MONET</div>
+        <div class="owner-panel hidden" id="ownerPanel">
+          <div class="eyebrow">WŁAŚCICIEL // PANEL ADMINA</div>
+          <input id="ownerTarget" type="text" placeholder="Nick gracza">
+          <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
+          <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
+          <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button></div>
+          <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+          <div class="owner-message" id="ownerMessage"></div>
+        </div>
+        <div class="shop-buttons"><button id="shopButton" class="shop-button">OTWÓRZ SKLEP <span>+</span></button><button id="ownedButton" class="shop-button">POSIADANI</button><button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button></div>
+        <div class="shop-modal hidden" id="shop">
+          <div class="shop-window">
+            <button class="shop-close" id="shopClose">X</button>
+            <div class="eyebrow">ARCANE MARKET / OFERTY CZARODZIEJÓW</div>
+            <h3>WYBIERZ CZARODZIEJA</h3>
+            <div class="wizard-offers">
+              <button class="wizard-card" data-wizard="apprentice"><b>ISKRA</b><span>DARMOWY</span></button>
+              <button class="wizard-card" data-wizard="storm"><b>BURZOWY</b><span>180 MONET</span></button>
+              <button class="wizard-card" data-wizard="guardian"><b>STRAŻNIK</b><span>260 MONET</span></button>
+              <button class="wizard-card" data-wizard="healer"><b>UZDROWICIEL</b><span>3000 MONET</span></button>
+              <button class="wizard-card" data-wizard="cloner"><b>KLONER</b><span>4000 MONET</span></button>
+              <button class="wizard-card" data-wizard="aegis"><b>AEGIS</b><span>3000 MONET</span></button>
+              <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
+            </div>
+            <div class="wizard-detail hidden" id="wizardDetail">
+              <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
+              <h4 id="wizardName">ISKRA</h4>
+              <p id="wizardPower">Moc zaklęcia: 12 | Tarcza: 100 | Cooldown: 0.30 s</p>
+              <div class="wizard-actions"><button id="buyButton">KUP</button><button id="useButton" class="secondary">UŻYJ</button><button id="exitButton" class="secondary">WYJDŹ</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="mode-buttons">
+          <button id="botButton">WALKA Z BOTEM <span>→</span></button>
+          <button id="playerButton" class="secondary">2 GRACZY <span>→</span></button>
+        </div>
+        <div class="result-message hidden" id="resultMessage"></div>
+        <div class="join-note" id="joinNote">WPISZ TEN SAM KOD, ABY ZAGRAĆ Z DRUGĄ OSOBĄ</div>
+        <div class="start-note">GRACZ 1: WASD + SPACJA&nbsp;&nbsp; / &nbsp;&nbsp;GRACZ 2: STRZAŁKI + NUM 0</div>
+      </div>
+    </section>
+
+    <div class="toast" id="toast"></div>
+  </main>
+  <script src="game.js"></script>
+</body>
+</html>
