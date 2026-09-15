@@ -50,7 +50,10 @@
       <div class="brand-block">
         <div class="eyebrow">WALKA CZARODZIEJÓW // ARENA</div>
         <h1>Walka Czarodziejów</h1>
-        <span class="player-name" id="playerName"></span>
+        <div class="player-header-row">
+          <span class="player-name" id="playerName"></span>
+          <button id="logoutButton" class="logout-button hidden" type="button">WYLOGUJ</button>
+        </div>
       </div>
       <div class="mission-block">
         <span class="label">MISSION</span>
@@ -139,13 +142,18 @@
         <p>Jeden krąg. Dwóch czarodziejów. Traf przeciwnika zaklęciem, zanim rozbije twoją tarczę.</p>
         <div class="coins-display">SKARBIEC <strong id="coinsText">0</strong> MONET</div>
         <div class="owner-panel hidden" id="ownerPanel">
-          <div class="eyebrow">WŁAŚCICIEL // PANEL ADMINA</div>
-          <input id="ownerTarget" type="text" placeholder="Nick gracza">
-          <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
-          <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
-          <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button></div>
-          <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
-          <div class="owner-message" id="ownerMessage"></div>
+          <div class="owner-panel-header">
+            <div class="eyebrow">WŁAŚCICIEL // PANEL ADMINA</div>
+            <button type="button" class="owner-toggle" id="ownerToggleButton">ZWIŃ</button>
+          </div>
+          <div class="owner-panel-body" id="ownerPanelBody">
+            <input id="ownerTarget" type="text" placeholder="Nick gracza">
+            <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
+            <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
+            <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button></div>
+            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+            <div class="owner-message" id="ownerMessage"></div>
+          </div>
         </div>
         <div class="shop-buttons"><button id="shopButton" class="shop-button">OTWÓRZ SKLEP <span>+</span></button><button id="ownedButton" class="shop-button">POSIADANI</button><button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button></div>
         <div class="shop-modal hidden" id="shop">
