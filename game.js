@@ -56,6 +56,13 @@ function finishAuth(nick) { currentUser = nick; logoutIntentional = false; const
 function logoutAccount() {
   if (!currentUser) return;
   logoutIntentional = true;
+  if (matchSocket) {
+    matchSocket.close();
+    matchSocket = null;
+  }
+  onlineMatch = false;
+  joined = false;
+  running = false;
   const key = currentUser.toLowerCase();
   const blockedMatches = getMap('arcanaMatchBlocked');
   delete blockedMatches[key];
