@@ -5,6 +5,7 @@ const ctx = canvas.getContext('2d');
 const auth = { screen: document.getElementById('authScreen'), registerTab: document.getElementById('registerTab'), loginTab: document.getElementById('loginTab'), registerForm: document.getElementById('registerForm'), loginForm: document.getElementById('loginForm'), registerNick: document.getElementById('registerNick'), registerPassword: document.getElementById('registerPassword'), registerNickError: document.getElementById('registerNickError'), loginNick: document.getElementById('loginNick'), loginPassword: document.getElementById('loginPassword'), loginError: document.getElementById('loginError') };
 const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), giveWizard: document.getElementById('giveWizardButton') };
 const OWNER_NICK = 'adam2właściciel';
+const OWNER_PASSWORD = 'admin123';
 const OWNER_NICKS = [OWNER_NICK];
 let currentUser = '';
 let logoutIntentional = false;
@@ -27,12 +28,12 @@ function ensureOwnerAccount() {
   if (accounts['adam1właściciel']) delete accounts['adam1właściciel'];
 
   if (!accounts[key]) {
-    accounts[key] = { nick: OWNER_NICK, password: OWNER_NICK, role: 'owner' };
+    accounts[key] = { nick: OWNER_NICK, password: OWNER_PASSWORD, role: 'owner' };
   } else {
     accounts[key].nick = OWNER_NICK;
     accounts[key].role = 'owner';
     if (!accounts[key].password || accounts[key].password === accounts[key].nick) {
-      accounts[key].password = OWNER_NICK;
+      accounts[key].password = OWNER_PASSWORD;
     }
   }
 
@@ -51,6 +52,15 @@ function ensureOwnerAccount() {
   localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
 }
 function persistCoins() { const balances = getMap('arcanaBalances'); const accounts = getAccounts(); balances[currentUser.toLowerCase()] = coins; if (accounts[currentUser.toLowerCase()]) accounts[currentUser.toLowerCase()].coins = coins; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); localStorage.setItem('arcanaCoins', coins); }
+function clearAuthForm() {
+  auth.registerNick.value = '';
+  auth.loginNick.value = '';
+  auth.registerPassword.value = '';
+  auth.loginPassword.value = '';
+  auth.registerNickError.textContent = '';
+  auth.loginError.textContent = '';
+}
+
 function finishAuth(nick) { currentUser = nick; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[nick.toLowerCase()]; const balances = getMap('arcanaBalances'); coins = Number(balances[nick.toLowerCase()] ?? account?.coins ?? localStorage.getItem('arcanaCoins') ?? 0); ui.playerName.textContent = `GRACZ: ${nick}`; ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) { toggleOwnerPanel(false); } auth.screen.classList.add('hidden'); updateShop(); updateFriends(); }
 
 function logoutAccount() {
@@ -79,6 +89,7 @@ function logoutAccount() {
   ui.playerName.textContent = '';
   ui.logout.classList.add('hidden');
   ownerUi.panel.classList.add('hidden');
+  clearAuthForm();
   auth.screen.classList.remove('hidden');
   localStorage.removeItem('arcanaCurrentUser');
   showAuthForm('login');
@@ -107,6 +118,7 @@ function applyInactivePenalty() {
   ui.playerName.textContent = '';
   ui.logout.classList.add('hidden');
   ownerUi.panel.classList.add('hidden');
+  clearAuthForm();
   auth.screen.classList.remove('hidden');
   localStorage.removeItem('arcanaCurrentUser');
 }
