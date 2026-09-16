@@ -156,6 +156,7 @@
         </div>
         <div class="shop-buttons">
           <button id="shopButton" class="shop-button">OTWÓRZ SKLEP <span>+</span></button>
+          <button id="backpackButton" class="shop-button backpack-button" type="button">PLECAK <span>▣</span></button>
           <button id="ownedButton" class="shop-button">POSIADANI</button>
           <button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button>
           <button id="logoutButton" class="logout-button hidden" type="button">WYLOGUJ</button>
@@ -174,12 +175,38 @@
               <button class="wizard-card" data-wizard="aegis"><b>AEGIS</b><span>3000 MONET</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
+            <button id="chestsButton" class="chests-entry" type="button">SKRZYNIE Z BRELOCZKAMI <span>→</span></button>
             <div class="wizard-detail hidden" id="wizardDetail">
               <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
               <h4 id="wizardName">ISKRA</h4>
               <p id="wizardPower">Moc zaklęcia: 12 | Tarcza: 100 | Cooldown: 0.30 s</p>
               <div class="wizard-actions"><button id="buyButton">KUP</button><button id="useButton" class="secondary">UŻYJ</button><button id="exitButton" class="secondary">WYJDŹ</button></div>
             </div>
+          </div>
+        </div>
+        <div class="backpack-modal hidden" id="backpackModal">
+          <div class="backpack-window">
+            <button class="shop-close" id="backpackClose" type="button">X</button>
+            <div class="eyebrow">ARCANE INVENTORY / KOLEKCJA</div>
+            <h3>PLECAK</h3>
+            <div class="backpack-empty">
+              <span class="backpack-icon">◇</span>
+              <strong>PUSTY PLECAK</strong>
+              <span>PRZEDMIOTY POJAWIĄ SIĘ WKRÓTCE</span>
+            </div>
+            <div class="keychain-collection hidden" id="keychainCollection"></div>
+          </div>
+        </div>
+        <div class="chest-modal hidden" id="chestModal">
+          <div class="chest-window">
+            <button class="shop-close" id="chestClose" type="button">X</button>
+            <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
+            <h3>SKRZYNIE Z BRELOCZKAMI</h3>
+            <p class="chest-note">Otwórz skrzynię, aby spróbować wylosować rzadki breloczek.</p>
+            <div class="chest-offers">
+              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>1% SZANSY NA BRELOCZEK</small><strong>OTWÓRZ</strong></button>
+            </div>
+            <div class="chest-result" id="chestResult"></div>
           </div>
         </div>
         <div class="mode-buttons">
