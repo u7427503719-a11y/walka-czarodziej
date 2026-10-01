@@ -25,7 +25,7 @@ const webSocketServer = new WebSocket.Server({ server });
 function send(socket, message) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
 function broadcast(room, sender, message) { room.forEach(socket => { if (socket !== sender) send(socket, message); }); }
 function leaveRoom(socket) { if (!socket.room) return; const room = rooms.get(socket.room); if (room) { room.delete(socket); if (!room.size) rooms.delete(socket.room); else broadcast(room, socket, { type: 'opponent-left' }); } socket.room = ''; }
-function finishRoom(socket) { if (!socket.room) return; const code = socket.room; const room = rooms.get(code); if (!room) { socket.room = ''; return; } room.forEach(player => { send(player, { type: 'round-ended' }); player.room = ''; }); rooms.delete(code); }
+function finishRoom(socket, message) { if (!socket.room) return; const code = socket.room; const room = rooms.get(code); if (!room) { socket.room = ''; return; } room.forEach(player => { send(player, { type: 'round-ended', winnerNick: String(message.winnerNick || socket.nick || '') }); player.room = ''; }); rooms.delete(code); }
 
 webSocketServer.on('connection', socket => {
   socket.on('message', rawMessage => {
@@ -40,12 +40,14 @@ webSocketServer.on('connection', socket => {
       rooms.set(code, room);
       socket.room = code;
       socket.nick = String(message.nick || 'GRACZ');
+      const profile = message.profile && typeof message.profile === 'object' ? message.profile : {};
+      socket.profile = { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)) };
       send(socket, { type: 'waiting', code });
-      if (room.size === 2) room.forEach(player => send(player, { type: 'matched' }));
+      if (room.size === 2) { const players = [...room]; players.forEach((player, index) => send(player, { type: 'matched', opponent: { nick: players[1 - index].nick, ...players[1 - index].profile } })); }
       return;
     }
     if (!socket.room) return;
-    if (message.type === 'game-over') { finishRoom(socket); return; }
+    if (message.type === 'game-over') { finishRoom(socket, message); return; }
     if (['state', 'spell', 'damage', 'reflect'].includes(message.type)) broadcast(rooms.get(socket.room), socket, message);
   });
   socket.on('close', () => leaveRoom(socket));
