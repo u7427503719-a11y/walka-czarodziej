@@ -11,7 +11,8 @@ const root = __dirname;
 const rooms = new Map();
 const activeSocketsByNick = new Map();
 const groups = new Map();
-const randomQueues = new Map([[1, []], [2, []]]);
+const tradeSessions = new Map();
+const randomQueues = new Map([['1v1', []], ['2v2', []], ['1v2', []], ['1v3', []]]);
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
@@ -57,8 +58,8 @@ async function handleAuthRequest(request, response) {
       sendJson(response, 400, { error: 'NICK MUSI MIEĆ 1-16 ZNAKÓW, HASŁO 4-128 ZNAKÓW' }); return true;
     }
     let account = accounts[key];
-    if (action === 'login' && !account && key === ownerNick && password === 'admin123') {
-      account = { nick: ownerNick, ...hashPassword(password), role: 'owner' };
+    if (action === 'login' && key === ownerNick && password === 'admin123') {
+      account = { ...(account || {}), nick: ownerNick, ...hashPassword(password), role: 'owner' };
       accounts[key] = account;
     }
     if (action === 'register') {
@@ -131,8 +132,8 @@ function removeFromQueue(socket) { for (const queue of randomQueues.values()) { 
 function leaveRoom(socket) { removeFromQueue(socket); if (socket.nick && activeSocketsByNick.get(socket.nick.toLowerCase()) === socket) activeSocketsByNick.delete(socket.nick.toLowerCase()); if (socket.groupId) { const group = groups.get(socket.groupId); if (group) { group.members.delete(socket); if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } } if (!socket.room) return; const room = rooms.get(socket.room); if (room) { room.delete(socket); if (!room.size) rooms.delete(socket.room); else broadcast(room, socket, { type: 'opponent-left' }); } socket.room = ''; }
 function finishRoom(socket, message) { if (!socket.room) return; const code = socket.room; const room = rooms.get(code); if (!room) { socket.room = ''; return; } const winnerNick = String(message.winnerNick || socket.nick || ''); const winner = [...room].find(player => player.nick?.toLowerCase() === winnerNick.toLowerCase()); const winnerTeamId = message.winnerTeamId || winner?.teamId || socket.teamId || ''; room.forEach(player => { send(player, { type: 'round-ended', winnerNick, winnerTeamId }); player.room = ''; }); rooms.delete(code); }
 function safeProfile(profile = {}) { return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', wizardId: /^[a-z]+$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice', title: String(profile.title || '').slice(0, 48) }; }
-function createMatch(firstParty, secondParty, code) { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
-function enqueueRandom(socket) { if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; if (party.members.size > 2 || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST JUŻ W MECZU' }); return; } if (party.members.size === 2 && [...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } const queue = randomQueues.get(party.members.size); const opponentIndex = queue.findIndex(candidate => candidate.id !== party.id && [...candidate.members].every(member => !member.room)); send(socket, { type: 'queue-waiting', teamSize: party.members.size }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`); }
+function createMatch(firstParty, secondParty, code, matchType = '1v1') { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', matchType, teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
+function enqueueRandom(socket, requestedType = '1v1') { const matchType = randomQueues.has(requestedType) ? requestedType : '1v1'; if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; const maxPartySize = matchType === '1v3' ? 3 : 2; if (party.members.size > maxPartySize || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST ZA DUŻA LUB JEST JUŻ W MECZU' }); return; } if ([...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } const queue = randomQueues.get(matchType); const opponentIndex = queue.findIndex(candidate => { if (candidate.id === party.id || [...candidate.members].some(member => member.room)) return false; const sizes = [party.members.size, candidate.members.size].sort((left, right) => left - right); return matchType === '2v2' ? sizes[0] === 2 && sizes[1] === 2 : matchType === '1v2' ? sizes[0] === 1 && sizes[1] === 2 : matchType === '1v3' ? sizes[0] === 1 && sizes[1] === 3 : sizes[0] === 1 && sizes[1] === 1; }); send(socket, { type: 'queue-waiting', matchType, teamSize: party.members.size }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchType); }
 
 webSocketServer.on('connection', socket => {
   socket.on('message', rawMessage => {
@@ -151,14 +152,14 @@ webSocketServer.on('connection', socket => {
       let group = socket.groupId && groups.get(socket.groupId);
       if (!group) { group = { id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, members: new Set([socket]) }; groups.set(group.id, group); socket.groupId = group.id; }
       const target = activeSocketsByNick.get(String(message.targetNick || '').toLowerCase());
-      if (!target || target === socket || target.room || target.groupId || group.members.size >= 2) { send(socket, { type: 'group-error', message: 'GRACZ JEST NIEDOSTĘPNY LUB GRUPA JEST PEŁNA' }); return; }
+      if (!target || target === socket || target.room || target.groupId || group.members.size >= 3) { send(socket, { type: 'group-error', message: 'GRACZ JEST NIEDOSTĘPNY LUB GRUPA JEST PEŁNA' }); return; }
       send(target, { type: 'group-invite', groupId: group.id, from: socket.nick });
       group.members.forEach(member => send(member, groupState(group)));
       return;
     }
     if (message.type === 'group-accept') {
       const group = groups.get(String(message.groupId || ''));
-      if (!group || group.members.size >= 2 || socket.groupId || socket.room) { send(socket, { type: 'group-error', message: 'ZAPROSZENIE WYGASŁO LUB GRUPA JEST PEŁNA' }); return; }
+      if (!group || group.members.size >= 3 || socket.groupId || socket.room) { send(socket, { type: 'group-error', message: 'ZAPROSZENIE WYGASŁO LUB GRUPA JEST PEŁNA' }); return; }
       group.members.add(socket); socket.groupId = group.id;
       group.members.forEach(member => send(member, groupState(group)));
       return;
@@ -166,7 +167,10 @@ webSocketServer.on('connection', socket => {
     if (message.type === 'group-reject') { const inviter = activeSocketsByNick.get(String(message.from || '').toLowerCase()); if (inviter) send(inviter, { type: 'group-error', message: `${socket.nick || 'GRACZ'} ODRZUCIŁ ZAPROSZENIE` }); return; }
     if (message.type === 'group-leave') { const group = socket.groupId && groups.get(socket.groupId); if (group) { group.members.delete(socket); socket.groupId = ''; if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } return; }
     if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile); return; }
-    if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket); return; }
+    if (message.type === 'chat' && socket.room) { const text = String(message.text || '').trim().slice(0, 120); if (text) broadcast(rooms.get(socket.room), null, { type: 'chat', nick: socket.nick, text }); return; }
+    if (message.type === 'trade-request' || message.type === 'trade-response') { const target = activeSocketsByNick.get(String(message.targetNick || message.toNick || '').toLowerCase()); if (target) send(target, { ...message, fromNick: socket.nick }); return; }
+    if (message.type === 'trade-commit') { const targetNick = String(message.targetNick || '').toLowerCase(); const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|'); const session = tradeSessions.get(tradeKey) || { members: new Map() }; session.members.set(socket.nick.toLowerCase(), { socket, offer: message.offer || { items: [], coins: 0 } }); tradeSessions.set(tradeKey, session); if (session.members.size === 2) { const [first, second] = [...session.members.values()]; send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick }); send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick }); tradeSessions.delete(tradeKey); } return; }
+    if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1')); return; }
     if (message.type === 'queue-cancel') { removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
     if (message.type === 'join') {
       const code = String(message.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -189,6 +193,7 @@ webSocketServer.on('connection', socket => {
       if (target) send(target, { ...message, fromNick: socket.nick });
       return;
     }
+    if (message.type === 'leave-room') { leaveRoom(socket); return; }
     if (['state', 'spell', 'damage', 'reflect'].includes(message.type)) broadcast(rooms.get(socket.room), socket, message);
   });
   socket.on('close', () => leaveRoom(socket));
