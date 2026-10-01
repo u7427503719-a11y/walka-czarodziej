@@ -34,6 +34,17 @@
       </div>
     </section>
 
+    <section class="device-screen hidden" id="deviceScreen">
+      <div class="device-panel">
+        <div class="eyebrow">USTAWIENIA GRY</div>
+        <h2>NA CZYM<br><em>GRASZ?</em></h2>
+        <div class="device-options">
+          <button type="button" data-device="laptop"><b>LAPTOP</b><span>KLAWIATURA I MYSZ</span></button>
+          <button type="button" data-device="mobile"><b>URZĄDZENIE MOBILNE</b><span>STEROWANIE DOTYKOWE</span></button>
+        </div>
+      </div>
+    </section>
+
     <section class="reveal-screen hidden" id="revealScreen">
       <div class="reveal-burst"></div>
       <div class="reveal-card">
@@ -127,6 +138,10 @@
     <div class="crosshair" id="crosshair"><span></span><i></i></div>
     <div class="target-box" id="targetBox"><span class="target-tag">HOSTILE // <b id="targetDistance">--</b> M</span></div>
     <div class="hit-marker" id="hitMarker">×</div>
+    <div class="touch-controls hidden" id="touchControls">
+      <div class="joystick" id="joystick" aria-label="Sterowanie ruchem"><div class="joystick-knob" id="joystickKnob"></div></div>
+      <div class="touch-actions"><button id="touchCast" type="button">STRZAŁ</button><button id="touchAbility" type="button">GADŻET</button></div>
+    </div>
 
     <section class="status-bar">
       <div><span class="status-dot"></span><strong id="statusText">ALL SYSTEMS NOMINAL</strong></div>
@@ -149,8 +164,9 @@
             <input id="ownerTarget" type="text" placeholder="Nick gracza">
             <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
             <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
-            <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button></div>
-            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+            <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button><button id="takeCoinsButton">ODEJMIJ</button></div>
+            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+            <div class="owner-row"><button id="resetAccountButton">ZERUJ KONTO GRACZA</button></div>
             <div class="owner-message" id="ownerMessage"></div>
           </div>
         </div>
@@ -173,6 +189,11 @@
               <button class="wizard-card" data-wizard="healer"><b>UZDROWICIEL</b><span>3000 MONET</span></button>
               <button class="wizard-card" data-wizard="cloner"><b>KLONER</b><span>4000 MONET</span></button>
               <button class="wizard-card" data-wizard="aegis"><b>AEGIS</b><span>3000 MONET</span></button>
+              <button class="wizard-card" data-wizard="knight"><b>RYCERZ</b><span>3500 MONET</span></button>
+              <button class="wizard-card" data-wizard="hercules"><b>HERKULES</b><span>10000 MONET</span></button>
+              <button class="wizard-card" data-wizard="sprinter"><b>SPRINTER</b><span>2000 MONET</span></button>
+              <button class="wizard-card" data-wizard="shieldbearer"><b>TARCZOWNIK</b><span>5000 MONET</span></button>
+              <button class="wizard-card" data-wizard="thunder"><b>PIORUN</b><span>7500 MONET</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
             <button id="chestsButton" class="chests-entry" type="button">SKRZYNIE Z BRELOCZKAMI <span>→</span></button>
