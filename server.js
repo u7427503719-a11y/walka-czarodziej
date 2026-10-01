@@ -16,6 +16,7 @@ const randomQueues = new Map([['1v1', []], ['2v2', []], ['1v2', []], ['1v3', []]
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
+const careerFile = path.join(dataDirectory, 'career.json');
 const ownerNick = 'adam2właściciel';
 
 function readAccounts() {
@@ -25,6 +26,68 @@ function readAccounts() {
 function writeAccounts(accounts) {
   fs.mkdirSync(dataDirectory, { recursive: true });
   fs.writeFileSync(accountFile, JSON.stringify(accounts, null, 2));
+}
+
+function readCareer() {
+  try {
+    const career = JSON.parse(fs.readFileSync(careerFile, 'utf8'));
+    return { players: career.players || {}, months: career.months || {} };
+  } catch { return { players: {}, months: {} }; }
+}
+
+function writeCareer(career) {
+  fs.mkdirSync(dataDirectory, { recursive: true });
+  fs.writeFileSync(careerFile, JSON.stringify(career, null, 2));
+}
+
+function warsawParts(date = new Date()) {
+  return Object.fromEntries(new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Europe/Warsaw', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', hourCycle: 'h23'
+  }).formatToParts(date).map(part => [part.type, part.value]));
+}
+
+function warsawMonthKey(date = new Date()) {
+  const parts = warsawParts(date);
+  return `${parts.year}-${parts.month}`;
+}
+
+function warsawDailyKey(date = new Date()) {
+  const parts = warsawParts(date);
+  const day = new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, Number(parts.day)));
+  if (Number(parts.hour) < 7) day.setUTCDate(day.getUTCDate() - 1);
+  return `${day.getUTCFullYear()}-${String(day.getUTCMonth() + 1).padStart(2, '0')}-${String(day.getUTCDate()).padStart(2, '0')}`;
+}
+
+function limitedWizardForMonth(month) {
+  const designs = [
+    ['ASTRALNY FENIKS', 130, 17], ['LODOWY TYTAN', 155, 13], ['BURZOWA ORAKULA', 110, 20],
+    ['KAMIENNY STRAŻNIK', 180, 12], ['SŁONECZNY RYCERZ', 140, 18], ['WIDMOWY ŁOWCA', 105, 22],
+    ['KSIĘŻYCOWA CZARODZIEJKA', 125, 19], ['MORSKI WŁADCA', 165, 14], ['ŻELAZNY GOLEM', 200, 11],
+    ['KOSMICZNY WĘDROWIEC', 120, 21], ['SMOCZY CZEMPION', 175, 15], ['LEŚNY ALCHIMIK', 115, 18]
+  ];
+  const [name, hp, damage] = designs[(Number(month.slice(0, 4)) * 12 + Number(month.slice(5, 7))) % designs.length];
+  return { id: `limited-${month}`, name: `${name} ${month}`, hp, damage, cooldown: .3, cost: 999999999, limited: true, month };
+}
+
+function finalizeCareerMonths(career, currentMonth) {
+  for (const [month, record] of Object.entries(career.months)) {
+    if (month >= currentMonth || record.finalized) continue;
+    const leaders = Object.entries(record.scores || {}).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 5);
+    const wizard = limitedWizardForMonth(month);
+    record.rewards = Object.fromEntries(leaders.map(([key]) => [key, wizard]));
+    record.finalized = true;
+  }
+}
+
+function careerState(career, playerKey) {
+  const month = warsawMonthKey();
+  const dailyKey = warsawDailyKey();
+  const player = career.players[playerKey] || { nick: playerKey, dailyKey, dailyWins: 0, dailyBoxes: 0 };
+  if (player.dailyKey !== dailyKey) Object.assign(player, { dailyKey, dailyWins: 0, dailyBoxes: 0 });
+  career.players[playerKey] = player;
+  const standings = Object.entries(career.months[month]?.scores || {}).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 10).map(([key, score], index) => ({ place: index + 1, nick: score.nick || career.players[key]?.nick || key, wins: score.wins }));
+  const limitedRewards = Object.values(career.months).filter(record => record.finalized && record.rewards?.[playerKey]).map(record => record.rewards[playerKey]);
+  return { type: 'career-state', month, dailyWins: player.dailyWins, dailyBoxes: player.dailyBoxes, standings, limitedRewards };
 }
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString('hex')) {
@@ -132,7 +195,7 @@ function groupState(group) { return { type: 'group-state', groupId: group.id, me
 function removeFromQueue(socket) { for (const queue of randomQueues.values()) { const index = queue.findIndex(party => party.members.has(socket)); if (index >= 0) queue.splice(index, 1); } }
 function leaveRoom(socket) { removeFromQueue(socket); if (socket.nick && activeSocketsByNick.get(socket.nick.toLowerCase()) === socket) activeSocketsByNick.delete(socket.nick.toLowerCase()); if (socket.groupId) { const group = groups.get(socket.groupId); if (group) { group.members.delete(socket); if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } } if (!socket.room) return; const room = rooms.get(socket.room); if (room) { room.delete(socket); if (!room.size) rooms.delete(socket.room); else broadcast(room, socket, { type: 'opponent-left' }); } socket.room = ''; }
 function finishRoom(socket, message) { if (!socket.room) return; const code = socket.room; const room = rooms.get(code); if (!room) { socket.room = ''; return; } const winnerNick = String(message.winnerNick || socket.nick || ''); const winner = [...room].find(player => player.nick?.toLowerCase() === winnerNick.toLowerCase()); const winnerTeamId = message.winnerTeamId || winner?.teamId || socket.teamId || ''; room.forEach(player => { send(player, { type: 'round-ended', winnerNick, winnerTeamId }); player.room = ''; }); rooms.delete(code); }
-function safeProfile(profile = {}) { return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', wizardId: /^[a-z]+$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice', title: String(profile.title || '').slice(0, 48) }; }
+function safeProfile(profile = {}) { return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', wizardId: /^(?:[a-z]+|limited-\d{4}-\d{2})$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice', title: String(profile.title || '').slice(0, 48) }; }
 function createMatch(firstParty, secondParty, code, matchType = '1v1') { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', matchType, teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
 function enqueueRandom(socket, requestedType = '1v1') { const matchType = randomQueues.has(requestedType) ? requestedType : '1v1'; if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; const maxPartySize = matchType === '1v3' ? 3 : 2; if (party.members.size > maxPartySize || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST ZA DUŻA LUB JEST JUŻ W MECZU' }); return; } if ([...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } const queue = randomQueues.get(matchType); const opponentIndex = queue.findIndex(candidate => { if (candidate.id === party.id || [...candidate.members].some(member => member.room)) return false; const sizes = [party.members.size, candidate.members.size].sort((left, right) => left - right); return matchType === '2v2' ? sizes[0] === 2 && sizes[1] === 2 : matchType === '1v2' ? sizes[0] === 1 && sizes[1] === 2 : matchType === '1v3' ? sizes[0] === 1 && sizes[1] === 3 : sizes[0] === 1 && sizes[1] === 1; }); send(socket, { type: 'queue-waiting', matchType, teamSize: party.members.size }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchType); }
 
@@ -169,6 +232,37 @@ webSocketServer.on('connection', socket => {
     if (message.type === 'group-leave') { const group = socket.groupId && groups.get(socket.groupId); if (group) { group.members.delete(socket); socket.groupId = ''; if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } return; }
     if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile); return; }
     if (message.type === 'chat' && socket.room) { const text = String(message.text || '').trim().slice(0, 120); if (text) broadcast(rooms.get(socket.room), null, { type: 'chat', nick: socket.nick, text }); return; }
+    if (['career-get', 'career-win', 'daily-box-open'].includes(message.type)) {
+      if (!socket.nick) return;
+      const career = readCareer();
+      const playerKey = socket.nick.toLowerCase();
+      const month = warsawMonthKey();
+      finalizeCareerMonths(career, month);
+      const state = careerState(career, playerKey);
+      const player = career.players[playerKey];
+      player.nick = socket.nick;
+      let reward = null;
+      if (message.type === 'career-win') {
+        player.dailyWins = Math.min(5, player.dailyWins + 1);
+        player.dailyBoxes = Math.min(5, player.dailyBoxes + 1);
+        career.months[month] ||= { scores: {}, finalized: false };
+        const scores = career.months[month].scores;
+        scores[playerKey] ||= { nick: socket.nick, wins: 0 };
+        scores[playerKey].nick = socket.nick;
+        scores[playerKey].wins += 1;
+      } else if (message.type === 'daily-box-open' && player.dailyBoxes > 0) {
+        player.dailyBoxes -= 1;
+        const kind = Math.random() < .5 ? 'keychain' : 'hat';
+        const items = kind === 'keychain'
+          ? ['strength-charm', 'damage-charm', 'vitality-charm', 'life-charm', 'ward-charm']
+          : ['strength-hat', 'guard-hat', 'light-hat'];
+        reward = { coins: 100, kind, itemId: items[Math.floor(Math.random() * items.length)] };
+      }
+      writeCareer(career);
+      if (reward) send(socket, { type: 'daily-box-reward', reward });
+      send(socket, careerState(career, playerKey));
+      return;
+    }
     if (message.type === 'trade-request' || message.type === 'trade-response') { const target = activeSocketsByNick.get(String(message.targetNick || message.toNick || '').toLowerCase()); if (target) send(target, { ...message, fromNick: socket.nick }); return; }
     if (message.type === 'trade-offer') {
       const targetNick = String(message.targetNick || '').toLowerCase();
