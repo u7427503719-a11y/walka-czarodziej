@@ -49,6 +49,11 @@
       <div class="reveal-burst"></div>
       <div class="reveal-card">
         <div class="eyebrow">NOWY CZARODZIEJ WKRACZA DO ARENY</div>
+        <div class="matchup-strip" id="matchupStrip">
+          <div><strong id="matchPlayerWizard">ISKRA</strong><span id="matchPlayerNick">GRACZ</span><small id="matchPlayerTitle"></small></div>
+          <b>VS</b>
+          <div><strong id="matchRivalWizard">ISKRA</strong><span id="matchRivalNick">PRZECIWNIK</span><small id="matchRivalTitle"></small></div>
+        </div>
         <div class="reveal-mage" id="revealMage">I</div>
         <div class="reveal-kicker">PRZEDSTAWIAMY</div>
         <h2 id="revealName">ISKRA</h2>
@@ -97,6 +102,24 @@
         <h3 id="profileName">PROFIL</h3>
         <canvas id="avatarDrawCanvas" width="280" height="280" aria-label="Rysunek avatara"></canvas>
         <div class="profile-actions"><button id="avatarClear" type="button">WYCZYŚĆ RYSUNEK</button><button id="avatarSave" type="button">ZAPISZ AVATAR</button></div>
+        <section class="profile-account-controls">
+          <button id="showNickChange" type="button">ZMIANA NICKU</button>
+          <form id="nickChangeForm" class="hidden">
+            <label>OBECNY NICK<input id="changeNickCurrent" autocomplete="username" required></label>
+            <label>OBECNE HASŁO<input id="changeNickPassword" type="password" autocomplete="current-password" required></label>
+            <label>NOWY NICK<input id="changeNickNew" maxlength="16" required></label>
+            <label class="consent-label"><input id="confirmNickChange" type="checkbox" required> POTWIERDZAM ZMIANĘ NICKU</label>
+            <button type="submit">ZAPISZ NICK</button><span id="nickChangeMessage" class="auth-error"></span>
+          </form>
+          <button id="showPasswordChange" type="button">ZMIANA HASŁA</button>
+          <form id="passwordChangeForm" class="hidden">
+            <label>OBECNE HASŁO<input id="changePasswordCurrent" type="password" autocomplete="current-password" required></label>
+            <label>NOWE HASŁO<input id="changePasswordNew" type="password" minlength="4" autocomplete="new-password" required></label>
+            <label>POWTÓRZ NOWE HASŁO<input id="changePasswordRepeat" type="password" minlength="4" autocomplete="new-password" required></label>
+            <button type="submit">ZAPISZ HASŁO</button><span id="passwordChangeMessage" class="auth-error"></span>
+          </form>
+          <label class="profile-select-label" for="titleSelect">TYTUŁ POSTACI<select id="titleSelect"></select></label>
+        </section>
         <label class="drop-toggle"><input id="dropEnabled" type="checkbox"> PRZEKAŻ WYBRANY BRELOCZEK PO PRZEGRANEJ</label>
         <label class="profile-select-label" for="dropKeychain">BRELOCZEK DO PRZEKAZANIA<select id="dropKeychain"></select></label>
         <section class="account-directory">
@@ -217,7 +240,7 @@
               <button class="wizard-card" data-wizard="thunder"><b>PIORUN</b><span>7500 MONET</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
-            <button id="chestsButton" class="chests-entry" type="button">SKRZYNIE Z BRELOCZKAMI <span>→</span></button>
+            <button id="chestsButton" class="chests-entry" type="button">SKRZYNIA Z KAPELUSZAMI I BRELOKAMI <span>→</span></button>
             <div class="wizard-detail hidden" id="wizardDetail">
               <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
               <h4 id="wizardName">ISKRA</h4>
@@ -236,6 +259,7 @@
               <strong>PUSTY PLECAK</strong>
               <span>OTWÓRZ SKRZYNIĘ, ABY ZDOBYĆ BRELOCZKI</span>
             </div>
+            <div class="hat-collection hidden" id="hatCollection"></div>
             <div class="keychain-collection hidden" id="keychainCollection"></div>
           </div>
         </div>
@@ -243,10 +267,10 @@
           <div class="chest-window">
             <button class="shop-close" id="chestClose" type="button">X</button>
             <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
-            <h3>SKRZYNIE Z BRELOCZKAMI</h3>
-            <p class="chest-note">SZANSE: +10% HP 30% / +10 HP 50% / REDUKCJA 10% 19% / SIŁA 20% 1%</p>
+            <h3>SKRZYNIA Z KAPELUSZAMI</h3>
+            <p class="chest-note">SZANSE: KAPELUSZ SIŁY 1% / KAPELUSZ OCHRONY 19% / KAPELUSZ LEKKIEJ OSŁONY 30% / BRELOCZEK 50%</p>
             <div class="chest-offers">
-              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>LOSOWANIE BRELOCZKA</small><strong>OTWÓRZ</strong></button>
+              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>LOSOWANIE KAPELUSZA LUB BRELOKA</small><strong>OTWÓRZ</strong></button>
             </div>
             <div class="chest-result" id="chestResult"></div>
           </div>
