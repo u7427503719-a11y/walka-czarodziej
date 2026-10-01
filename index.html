@@ -210,7 +210,7 @@
             <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
             <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
             <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button><button id="takeCoinsButton">ODEJMIJ</button></div>
-            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="illusionist">ILUZJONER</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
             <div class="owner-row"><button id="resetAccountButton">ZERUJ KONTO GRACZA</button></div>
             <div class="owner-message" id="ownerMessage"></div>
           </div>
@@ -220,6 +220,8 @@
           <button id="backpackButton" class="shop-button backpack-button" type="button">PLECAK <span>▣</span></button>
           <button id="ownedButton" class="shop-button">POSIADANI</button>
           <button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button>
+          <button id="newsButton" class="shop-button news-button" type="button">NOWOŚCI</button>
+          <button id="musicButton" class="shop-button" type="button">MUZYKA: WŁĄCZ</button>
         </div>
         <div class="shop-modal hidden" id="shop">
           <div class="shop-window">
@@ -238,14 +240,27 @@
               <button class="wizard-card" data-wizard="sprinter"><b>SPRINTER</b><span>2000 MONET</span></button>
               <button class="wizard-card" data-wizard="shieldbearer"><b>TARCZOWNIK</b><span>5000 MONET</span></button>
               <button class="wizard-card" data-wizard="thunder"><b>PIORUN</b><span>7500 MONET</span></button>
+              <button class="wizard-card" data-wizard="illusionist"><b>ILUZJONER</b><span>6000 MONET</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
-            <button id="chestsButton" class="chests-entry" type="button">SKRZYNIA Z KAPELUSZAMI I BRELOKAMI <span>→</span></button>
+            <button id="chestsButton" class="chests-entry" type="button">OTWÓRZ SKRZYNIE <span>→</span></button>
             <div class="wizard-detail hidden" id="wizardDetail">
               <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
               <h4 id="wizardName">ISKRA</h4>
               <p id="wizardPower">Moc zaklęcia: 12 | Tarcza: 100 | Cooldown: 0.30 s</p>
               <div class="wizard-actions"><button id="buyButton">KUP</button><button id="useButton" class="secondary">UŻYJ</button><button id="exitButton" class="secondary">WYJDŹ</button></div>
+            </div>
+          </div>
+        </div>
+        <div class="news-modal hidden" id="newsModal">
+          <div class="news-window">
+            <button class="shop-close" id="newsClose" type="button">X</button>
+            <div class="eyebrow">ARCANE MARKET / NOWOŚCI</div>
+            <h3>NOWOŚCI</h3>
+            <div class="news-columns">
+              <section><h4>NOWY</h4><div id="newNewsList"></div></section>
+              <section><h4>ZMIENIONY</h4><div id="changedNewsList"></div></section>
+              <section><h4>USUNIĘTY</h4><div id="removedNewsList"></div></section>
             </div>
           </div>
         </div>
@@ -267,16 +282,20 @@
           <div class="chest-window">
             <button class="shop-close" id="chestClose" type="button">X</button>
             <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
-            <h3>SKRZYNIA Z KAPELUSZAMI</h3>
-            <p class="chest-note">SZANSE: KAPELUSZ SIŁY 1% / KAPELUSZ OCHRONY 19% / KAPELUSZ LEKKIEJ OSŁONY 30% / BRELOCZEK 50%</p>
+            <h3>SKRZYNIE Z NAGRODAMI</h3>
+            <p class="chest-note">KAPELUSZE I BRELOCZKI SĄ LOSOWANE W ODDZIELNYCH SKRZYNIACH.</p>
             <div class="chest-offers">
-              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>LOSOWANIE KAPELUSZA LUB BRELOKA</small><strong>OTWÓRZ</strong></button>
+              <button class="chest-card" data-chest="hats" type="button"><span class="chest-symbol">♛</span><b>SKRZYNIA KAPELUSZÓW</b><small>TYLKO KAPELUSZE</small><strong>OTWÓRZ</strong></button>
+              <button class="chest-card" data-chest="keychains" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA BRELOCZKÓW</b><small>TYLKO ZWYKŁE BRELOCZKI</small><strong>OTWÓRZ</strong></button>
             </div>
             <div class="chest-result" id="chestResult"></div>
           </div>
         </div>
         <div class="mode-buttons">
           <button id="botButton">WALKA Z BOTEM <span>→</span></button>
+          <button id="botTwoVTwoButton" class="secondary" type="button">2 NA 2 Z BOTAMI <span>→</span></button>
+          <button id="botOneVTwoButton" class="secondary" type="button">1 NA 2 <span>→</span></button>
+          <button id="botOneVThreeButton" class="secondary" type="button">1 NA 3 <span>→</span></button>
           <button id="playerButton" class="secondary">2 GRACZY <span>→</span></button>
           <button id="randomQueueButton" class="secondary" type="button">LOSOWA GRA <span>→</span></button>
         </div>
