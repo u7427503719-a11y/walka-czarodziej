@@ -128,3 +128,22 @@ h1 { margin: 7px 0 0; font: 700 23px/1 'Barlow Condensed', sans-serif; letter-sp
 .rotate-prompt strong { color: var(--cyan); font: 800 30px 'Barlow Condensed'; }
 .rotate-prompt span { color: var(--muted); font-size: 11px; }
 @media (orientation: portrait) and (max-width: 1100px) { .rotate-prompt.landscape-required { display: grid; } }
+.profile-account-controls { display: grid; gap: 8px; margin-top: 16px; padding: 14px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.profile-account-controls > button, .profile-account-controls form > button { min-height: 38px; padding: 9px 12px; border: 1px solid var(--cyan); background: rgba(115,225,221,.08); color: var(--cyan); cursor: pointer; font: 700 10px 'Space Grotesk'; letter-spacing: .08em; }
+.profile-account-controls form { display: grid; gap: 5px; }
+.profile-account-controls form label { display: block; margin-top: 8px; color: var(--muted); font-size: 9px; letter-spacing: .1em; }
+.profile-account-controls form input { display: block; width: 100%; margin-top: 5px; padding: 10px; border: 1px solid var(--line); background: rgba(4,12,28,.8); color: var(--ink); font: 13px 'Space Grotesk'; }
+.profile-account-controls form .consent-label { display: flex; align-items: center; gap: 8px; color: var(--ink); }
+.profile-account-controls form .consent-label input { width: auto; margin: 0; accent-color: var(--cyan); }
+.profile-account-controls .auth-error { display: block; }
+.friend-identity { display: flex; min-width: 0; align-items: center; gap: 9px; }
+.friend-avatar { display: grid; flex: 0 0 30px; width: 30px; aspect-ratio: 1; place-items: center; border: 1px solid var(--cyan); border-radius: 50%; background: rgba(115,225,221,.1); color: var(--cyan); font: 700 13px 'Barlow Condensed'; }
+.matchup-strip { display: grid; grid-template-columns: minmax(0,1fr) auto minmax(0,1fr); align-items: center; gap: 18px; margin: 25px auto 0; width: min(600px, 100%); }
+.matchup-strip > div { display: grid; gap: 5px; min-width: 0; }
+.matchup-strip > div:last-child { text-align: right; }
+.matchup-strip strong { color: var(--cyan); font: 700 17px 'Barlow Condensed'; }
+.matchup-strip span { overflow-wrap: anywhere; color: var(--ink); font: 700 12px 'Space Grotesk'; }
+.matchup-strip small { min-height: 13px; color: var(--orange); font-size: 9px; letter-spacing: .08em; }
+.matchup-strip > b { color: var(--orange); font: 800 19px 'Barlow Condensed'; }
+.hat-collection { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 8px; margin-bottom: 10px; }
+@media (max-width: 560px) { .hat-collection { grid-template-columns: 1fr; }.matchup-strip { gap: 8px; margin-top: 18px; }.matchup-strip strong { font-size: 14px; }.matchup-strip span { font-size: 10px; }.matchup-strip > b { font-size: 15px; } }
