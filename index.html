@@ -83,6 +83,7 @@
         <div class="eyebrow">ARCANE SOCIAL // GRACZE</div>
         <h3>ZNAJOMI</h3>
         <div class="friends-tabs"><button id="friendsTab" class="active" type="button">ZNAJOMI</button><button id="requestsTab" type="button">ZAPROSZENIA</button><button id="suggestionsTab" type="button">SUGESTIE</button></div>
+        <div class="group-status" id="groupStatus"></div>
         <div id="friendsView"><div class="friends-list" id="friendsList"></div></div>
         <div id="requestsView" class="friends-tab-view hidden"><div class="friend-add-row"><input id="inviteNick" type="text" placeholder="Nick gracza"><button id="sendInviteButton" type="button">WYŚLIJ</button></div><div class="friend-message" id="inviteMessage"></div><div class="friends-empty">WYSŁANE ZAPROSZENIE CZEKA NA AKCEPTACJĘ</div></div>
         <div id="suggestionsView" class="friends-tab-view hidden"><div class="friends-list" id="suggestionsList"></div></div>
@@ -98,9 +99,16 @@
         <div class="profile-actions"><button id="avatarClear" type="button">WYCZYŚĆ RYSUNEK</button><button id="avatarSave" type="button">ZAPISZ AVATAR</button></div>
         <label class="drop-toggle"><input id="dropEnabled" type="checkbox"> PRZEKAŻ WYBRANY BRELOCZEK PO PRZEGRANEJ</label>
         <label class="profile-select-label" for="dropKeychain">BRELOCZEK DO PRZEKAZANIA<select id="dropKeychain"></select></label>
+        <section class="account-directory">
+          <h4>ISTNIEJĄCE KONTA</h4>
+          <div class="account-list" id="profileAccountList"></div>
+          <div class="account-details hidden" id="accountDetails"><strong id="accountStatsName"></strong><span id="accountStatsCoins"></span><div id="accountCharacters"></div><button id="deleteAccountButton" type="button">USUŃ KONTO</button></div>
+        </section>
         <button id="logoutButton" class="logout-button" type="button">WYLOGUJ SIĘ</button>
       </div>
     </section>
+    <section class="confirm-modal hidden" id="confirmDeleteModal" role="dialog" aria-modal="true"><div class="confirm-window"><p>CZY NA PEWNO CHCESZ USUNĄĆ KONTO?</p><div><button id="confirmDeleteYes" type="button">TAK</button><button id="confirmDeleteNo" type="button">NIE</button></div></div></section>
+    <section class="group-invite-modal hidden" id="groupInviteModal" role="dialog" aria-modal="true"><div class="confirm-window"><p id="groupInviteText">ZAPROSZENIE DO GRUPY</p><div><button id="acceptGroupInvite" type="button">DOŁĄCZ</button><button id="rejectGroupInvite" type="button">ODRZUĆ</button></div></div></section>
 
     <section class="hud hud-left">
       <div class="instrument">
@@ -246,6 +254,7 @@
         <div class="mode-buttons">
           <button id="botButton">WALKA Z BOTEM <span>→</span></button>
           <button id="playerButton" class="secondary">2 GRACZY <span>→</span></button>
+          <button id="randomQueueButton" class="secondary" type="button">LOSOWA GRA <span>→</span></button>
         </div>
         <div class="result-message hidden" id="resultMessage"></div>
         <div class="join-note" id="joinNote">WPISZ TEN SAM KOD, ABY ZAGRAĆ Z DRUGĄ OSOBĄ</div>
@@ -254,6 +263,7 @@
     </section>
 
     <div class="toast" id="toast"></div>
+    <div class="rotate-prompt" id="rotatePrompt"><div><strong>OBRÓĆ URZĄDZENIE</strong><span>GRA WYMAGA UKŁADU POZIOMEGO</span></div></div>
   </main>
   <script src="game.js"></script>
 </body>
