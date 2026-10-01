@@ -75,6 +75,7 @@
         <strong id="scoreText">000000</strong>
       </div>
     </section>
+    <button id="profileButton" class="profile-button hidden" type="button" aria-label="Profil gracza"><canvas id="profileAvatar" width="96" height="96"></canvas></button>
 
     <section class="friends-modal hidden" id="friendsModal">
       <div class="friends-window">
@@ -85,6 +86,19 @@
         <div id="friendsView"><div class="friends-list" id="friendsList"></div></div>
         <div id="requestsView" class="friends-tab-view hidden"><div class="friend-add-row"><input id="inviteNick" type="text" placeholder="Nick gracza"><button id="sendInviteButton" type="button">WYŚLIJ</button></div><div class="friend-message" id="inviteMessage"></div><div class="friends-empty">WYSŁANE ZAPROSZENIE CZEKA NA AKCEPTACJĘ</div></div>
         <div id="suggestionsView" class="friends-tab-view hidden"><div class="friends-list" id="suggestionsList"></div></div>
+      </div>
+    </section>
+
+    <section class="profile-modal hidden" id="profileModal">
+      <div class="profile-window">
+        <button id="profileClose" class="shop-close" type="button">X</button>
+        <div class="eyebrow">PROFIL GRACZA</div>
+        <h3 id="profileName">PROFIL</h3>
+        <canvas id="avatarDrawCanvas" width="280" height="280" aria-label="Rysunek avatara"></canvas>
+        <div class="profile-actions"><button id="avatarClear" type="button">WYCZYŚĆ RYSUNEK</button><button id="avatarSave" type="button">ZAPISZ AVATAR</button></div>
+        <label class="drop-toggle"><input id="dropEnabled" type="checkbox"> PRZEKAŻ WYBRANY BRELOCZEK PO PRZEGRANEJ</label>
+        <label class="profile-select-label" for="dropKeychain">BRELOCZEK DO PRZEKAZANIA<select id="dropKeychain"></select></label>
+        <button id="logoutButton" class="logout-button" type="button">WYLOGUJ SIĘ</button>
       </div>
     </section>
 
@@ -175,7 +189,6 @@
           <button id="backpackButton" class="shop-button backpack-button" type="button">PLECAK <span>▣</span></button>
           <button id="ownedButton" class="shop-button">POSIADANI</button>
           <button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button>
-          <button id="logoutButton" class="logout-button hidden" type="button">WYLOGUJ</button>
         </div>
         <div class="shop-modal hidden" id="shop">
           <div class="shop-window">
@@ -213,7 +226,7 @@
             <div class="backpack-empty">
               <span class="backpack-icon">◇</span>
               <strong>PUSTY PLECAK</strong>
-              <span>PRZEDMIOTY POJAWIĄ SIĘ WKRÓTCE</span>
+              <span>OTWÓRZ SKRZYNIĘ, ABY ZDOBYĆ BRELOCZKI</span>
             </div>
             <div class="keychain-collection hidden" id="keychainCollection"></div>
           </div>
@@ -223,9 +236,9 @@
             <button class="shop-close" id="chestClose" type="button">X</button>
             <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
             <h3>SKRZYNIE Z BRELOCZKAMI</h3>
-            <p class="chest-note">Otwórz skrzynię, aby spróbować wylosować rzadki breloczek.</p>
+            <p class="chest-note">SZANSE: +10% HP 30% / +10 HP 50% / REDUKCJA 10% 19% / SIŁA 20% 1%</p>
             <div class="chest-offers">
-              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>1% SZANSY NA BRELOCZEK</small><strong>OTWÓRZ</strong></button>
+              <button class="chest-card" data-chest="main" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA</b><small>LOSOWANIE BRELOCZKA</small><strong>OTWÓRZ</strong></button>
             </div>
             <div class="chest-result" id="chestResult"></div>
           </div>
