@@ -101,3 +101,30 @@ h1 { margin: 7px 0 0; font: 700 23px/1 'Barlow Condensed', sans-serif; letter-sp
 .keychain-actions button { padding: 7px 4px !important; color: var(--orange) !important; }
 .backpack-window { max-height: 90dvh; overflow-y: auto; }
 @media (max-width: 800px) { .brand-block { padding-left: 52px; }.profile-button { top: 14px; left: 16px; width: 42px; height: 42px; }.profile-window { padding: 22px; } }
+.account-directory { margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); }
+.account-directory h4 { margin: 0 0 9px; color: var(--cyan); font: 700 14px 'Barlow Condensed'; }
+.account-list { display: grid; gap: 5px; max-height: 145px; overflow-y: auto; }
+.account-list button { padding: 8px 10px; border: 1px solid var(--line); background: rgba(7,25,34,.78); color: var(--ink); text-align: left; cursor: pointer; }
+.account-list button:hover { border-color: var(--cyan); }
+.account-details { display: grid; gap: 8px; margin-top: 10px; padding: 12px; border: 1px solid rgba(255,176,75,.4); color: var(--muted); font-size: 11px; }
+.account-details strong { color: var(--orange); font-size: 14px; }
+.account-details button, .confirm-window button { padding: 10px 14px; border: 1px solid var(--red); background: rgba(255,95,87,.12); color: var(--red); cursor: pointer; font: 700 10px 'Space Grotesk'; }
+.account-details button:disabled { opacity: .4; cursor: not-allowed; }
+.confirm-modal, .group-invite-modal { position: fixed; z-index: 13; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(3,8,20,.82); }
+.group-invite-modal { z-index: 14; }
+.confirm-window { width: min(380px, 100%); padding: 22px; border: 1px solid rgba(255,176,75,.55); background: #101936; text-align: center; }
+.confirm-window p { margin: 0 0 18px; color: var(--ink); font: 700 16px 'Barlow Condensed'; }
+.confirm-window > div { display: flex; justify-content: center; gap: 9px; }
+.confirm-window button:last-child { border-color: var(--line); background: transparent; color: var(--ink); }
+.group-status { min-height: 18px; margin: -5px 0 10px; color: var(--orange); font-size: 10px; }
+.friend-item { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.friend-item > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.friend-item > button { flex: 0 0 auto; max-width: 48%; padding: 7px 8px; border: 1px solid var(--cyan); background: transparent; color: var(--cyan); cursor: pointer; font: 700 8px 'Space Grotesk'; }
+.mode-buttons { flex-wrap: wrap; }
+.mode-buttons > button { min-width: 0; }
+.rotate-prompt { display: none; position: fixed; z-index: 30; inset: 0; place-items: center; padding: 24px; background: #06141d; text-align: center; }
+.rotate-prompt.show { display: grid; }
+.rotate-prompt div { display: grid; gap: 10px; }
+.rotate-prompt strong { color: var(--cyan); font: 800 30px 'Barlow Condensed'; }
+.rotate-prompt span { color: var(--muted); font-size: 11px; }
+@media (orientation: portrait) and (max-width: 1100px) { .rotate-prompt.landscape-required { display: grid; } }
