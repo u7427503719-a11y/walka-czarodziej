@@ -82,3 +82,22 @@ h1 { margin: 7px 0 0; font: 700 23px/1 'Barlow Condensed', sans-serif; letter-sp
 .start-screen { overflow-y: auto; }
 @media (max-width: 800px) { .game-shell { height: 100dvh; min-height: 0; }.start-panel { margin-top: 0; }.start-screen { align-items: start; }.wizard-offers { grid-template-columns: repeat(2, minmax(0, 1fr)); }.owner-row { flex-wrap: wrap; }.owner-row > * { min-width: 0; }.touch-controls { inset-inline: 14px; bottom: 54px; }.joystick { width: 124px; height: 124px; }.touch-actions button { min-width: 96px; min-height: 50px; } }
 @media (max-width: 420px) { .touch-controls { inset-inline: 10px; }.joystick { width: 112px; height: 112px; }.touch-actions button { min-width: 82px; padding-inline: 8px; font-size: 9px; }.device-panel { padding: 22px; }.start-panel { width: calc(100vw - 18px); padding: 12px; } }
+.brand-block { position: relative; min-height: 56px; padding-left: 62px; }
+.profile-button { position: fixed; z-index: 7; top: 18px; left: 22px; width: 50px; height: 50px; padding: 0 !important; overflow: hidden; border: 1px solid var(--cyan) !important; border-radius: 50%; background: #15323a !important; cursor: pointer; pointer-events: auto; }
+.profile-button canvas { display: block; width: 100%; height: 100%; border-radius: 50%; }
+.profile-modal { position: fixed; z-index: 12; inset: 0; display: grid; place-items: center; padding: 18px; background: rgba(4,10,25,.84); }
+.profile-window { position: relative; width: min(440px, 100%); max-height: 92dvh; overflow-y: auto; padding: 28px; border: 1px solid rgba(115,225,221,.5); background: #101936; }
+.profile-window h3 { margin: 8px 0 14px; font: 700 30px/1 'Barlow Condensed'; }
+#avatarDrawCanvas { display: block; width: min(280px, 100%); aspect-ratio: 1; margin: 0 auto 12px; border: 1px solid var(--line); background: #15323a; touch-action: none; cursor: crosshair; }
+.profile-actions, .keychain-actions { display: flex; gap: 7px; }
+.profile-actions button, .keychain-actions button { flex: 1; min-width: 0; padding: 9px 6px !important; border: 1px solid var(--line) !important; background: transparent !important; color: var(--cyan) !important; cursor: pointer; font: 700 9px 'Space Grotesk' !important; letter-spacing: .05em !important; }
+.profile-actions button:disabled, .keychain-actions button:disabled { opacity: .4; cursor: not-allowed; }
+.drop-toggle { display: flex; align-items: flex-start; gap: 9px; margin-top: 18px; color: var(--ink); font-size: 10px; line-height: 1.5; }
+.drop-toggle input { flex: 0 0 auto; accent-color: var(--cyan); }
+.profile-select-label { display: block; margin-top: 14px; color: var(--muted); font-size: 9px; letter-spacing: .12em; }
+.profile-select-label select { display: block; width: 100%; margin-top: 7px; padding: 10px; border: 1px solid var(--line); background: #0b192a; color: var(--ink); }
+.profile-window .logout-button { width: 100%; margin: 16px 0 0; }
+.keychain-actions { margin-top: 9px; }
+.keychain-actions button { padding: 7px 4px !important; color: var(--orange) !important; }
+.backpack-window { max-height: 90dvh; overflow-y: auto; }
+@media (max-width: 800px) { .brand-block { padding-left: 52px; }.profile-button { top: 14px; left: 16px; width: 42px; height: 42px; }.profile-window { padding: 22px; } }
