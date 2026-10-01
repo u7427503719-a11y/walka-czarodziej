@@ -127,6 +127,7 @@ const server = http.createServer((request, response) => {
 const webSocketServer = new WebSocket.Server({ server });
 function send(socket, message) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
 function broadcast(room, sender, message) { room.forEach(socket => { if (socket !== sender) send(socket, message); }); }
+function safeTradeOffer(offer = {}) { return { items: Array.isArray(offer.items) ? offer.items.slice(0, 100).map(item => ({ id: String(item.id || '').slice(0, 64), label: String(item.label || '').slice(0, 80) })).filter(item => /^(keychain|hat|wizard):[a-z0-9-]+$/i.test(item.id)) : [], coins: Math.max(0, Math.min(1e9, Number(offer.coins) || 0)) }; }
 function groupState(group) { return { type: 'group-state', groupId: group.id, members: [...group.members].map(player => player.nick) }; }
 function removeFromQueue(socket) { for (const queue of randomQueues.values()) { const index = queue.findIndex(party => party.members.has(socket)); if (index >= 0) queue.splice(index, 1); } }
 function leaveRoom(socket) { removeFromQueue(socket); if (socket.nick && activeSocketsByNick.get(socket.nick.toLowerCase()) === socket) activeSocketsByNick.delete(socket.nick.toLowerCase()); if (socket.groupId) { const group = groups.get(socket.groupId); if (group) { group.members.delete(socket); if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } } if (!socket.room) return; const room = rooms.get(socket.room); if (room) { room.delete(socket); if (!room.size) rooms.delete(socket.room); else broadcast(room, socket, { type: 'opponent-left' }); } socket.room = ''; }
@@ -169,7 +170,23 @@ webSocketServer.on('connection', socket => {
     if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile); return; }
     if (message.type === 'chat' && socket.room) { const text = String(message.text || '').trim().slice(0, 120); if (text) broadcast(rooms.get(socket.room), null, { type: 'chat', nick: socket.nick, text }); return; }
     if (message.type === 'trade-request' || message.type === 'trade-response') { const target = activeSocketsByNick.get(String(message.targetNick || message.toNick || '').toLowerCase()); if (target) send(target, { ...message, fromNick: socket.nick }); return; }
-    if (message.type === 'trade-commit') { const targetNick = String(message.targetNick || '').toLowerCase(); const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|'); const session = tradeSessions.get(tradeKey) || { members: new Map() }; session.members.set(socket.nick.toLowerCase(), { socket, offer: message.offer || { items: [], coins: 0 } }); tradeSessions.set(tradeKey, session); if (session.members.size === 2) { const [first, second] = [...session.members.values()]; send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick }); send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick }); tradeSessions.delete(tradeKey); } return; }
+    if (message.type === 'trade-offer') {
+      const targetNick = String(message.targetNick || '').toLowerCase();
+      const target = activeSocketsByNick.get(targetNick);
+      if (!socket.nick || !target || target === socket) return;
+      const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|');
+      const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() };
+      if (!session.offers) session.offers = new Map();
+      const offer = safeTradeOffer(message.offer);
+      const senderKey = socket.nick.toLowerCase();
+      const changed = JSON.stringify(session.offers.get(senderKey)) !== JSON.stringify(offer);
+      if (changed) session.members.clear();
+      session.offers.set(senderKey, offer);
+      tradeSessions.set(tradeKey, session);
+      send(target, { type: 'trade-offer', fromNick: socket.nick, offer, changed });
+      return;
+    }
+    if (message.type === 'trade-commit') { const targetNick = String(message.targetNick || '').toLowerCase(); const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|'); const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() }; const offer = safeTradeOffer(message.offer); session.offers.set(socket.nick.toLowerCase(), offer); session.members.set(socket.nick.toLowerCase(), { socket, offer }); tradeSessions.set(tradeKey, session); if (session.members.size === 2) { const [first, second] = [...session.members.values()]; send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick }); send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick }); tradeSessions.delete(tradeKey); } return; }
     if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1')); return; }
     if (message.type === 'queue-cancel') { removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
     if (message.type === 'join') {
