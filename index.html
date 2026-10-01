@@ -240,6 +240,8 @@
           <button id="ownedButton" class="shop-button">POSIADANI</button>
           <button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button>
           <button id="newsButton" class="shop-button news-button" type="button">NOWOŚCI</button>
+          <button id="dailyMissionButton" class="shop-button" type="button">MISJE DNIA <span id="dailyMissionBadge">0/5</span></button>
+          <button id="leaderboardButton" class="shop-button" type="button">RANKING MIESIĄCA <span>TOP 5</span></button>
           <button id="musicButton" class="shop-button" type="button">MUZYKA: WŁĄCZ</button>
         </div>
         <div class="shop-modal hidden" id="shop">
@@ -303,11 +305,25 @@
             <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
             <h3>SKRZYNIE Z NAGRODAMI</h3>
             <p class="chest-note">KAPELUSZE I BRELOCZKI SĄ LOSOWANE W ODDZIELNYCH SKRZYNIACH.</p>
+            <div class="daily-mission-panel">
+              <div><strong id="dailyMissionProgress">WYGRANE DZISIAJ: 0/5</strong><span id="dailyBoxCount">DOSTĘPNE SKRZYNIE: 0/5</span><small id="dailyResetText">NOWE MISJE CODZIENNIE O 07:00 CZASU POLSKIEGO</small></div>
+              <button id="dailyBoxOpenButton" type="button" disabled>OTWÓRZ SKRZYNIĘ DZIENNĄ</button>
+            </div>
             <div class="chest-offers">
               <button class="chest-card" data-chest="hats" type="button"><span class="chest-symbol">♛</span><b>SKRZYNIA KAPELUSZÓW</b><small>TYLKO KAPELUSZE</small><strong>OTWÓRZ</strong></button>
               <button class="chest-card" data-chest="keychains" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA BRELOCZKÓW</b><small>TYLKO ZWYKŁE BRELOCZKI</small><strong>OTWÓRZ</strong></button>
             </div>
             <div class="chest-result" id="chestResult"></div>
+          </div>
+        </div>
+        <div class="leaderboard-modal hidden" id="leaderboardModal" role="dialog" aria-modal="true">
+          <div class="leaderboard-window">
+            <button class="shop-close" id="leaderboardClose" type="button">X</button>
+            <div class="eyebrow">ARCANE COUNCIL / SEZON</div>
+            <h3 id="leaderboardTitle">RANKING MIESIĄCA</h3>
+            <p>PIĘĆ NAJLEPSZYCH OSÓB OTRZYMA UNIKALNEGO CZARODZIEJA TEGO MIESIĄCA.</p>
+            <ol id="leaderboardList" class="leaderboard-list"><li>ŁADOWANIE RANKINGU...</li></ol>
+            <div id="leaderboardStatus" class="leaderboard-status"></div>
           </div>
         </div>
         <div class="mode-buttons">
