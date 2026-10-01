@@ -132,6 +132,23 @@
     </section>
     <section class="confirm-modal hidden" id="confirmDeleteModal" role="dialog" aria-modal="true"><div class="confirm-window"><p>CZY NA PEWNO CHCESZ USUNĄĆ KONTO?</p><div><button id="confirmDeleteYes" type="button">TAK</button><button id="confirmDeleteNo" type="button">NIE</button></div></div></section>
     <section class="group-invite-modal hidden" id="groupInviteModal" role="dialog" aria-modal="true"><div class="confirm-window"><p id="groupInviteText">ZAPROSZENIE DO GRUPY</p><div><button id="acceptGroupInvite" type="button">DOŁĄCZ</button><button id="rejectGroupInvite" type="button">ODRZUĆ</button></div></div></section>
+    <section class="chat-modal hidden" id="chatModal" role="dialog" aria-modal="true">
+      <div class="chat-window">
+        <button id="chatClose" class="shop-close" type="button">X</button>
+        <div class="eyebrow">ARCANE COMMS</div><h3>CZAT</h3>
+        <div class="chat-suggestions"><button type="button" data-chat="GG">GG</button><button type="button" data-chat="POWODZENIA">POWODZENIA</button><button type="button" data-chat="DOBRY RUCH">DOBRY RUCH</button><button type="button" data-chat="😄">😄</button><button type="button" data-chat="🔥">🔥</button></div>
+        <form id="chatForm" class="chat-form"><input id="chatInput" maxlength="120" autocomplete="off" placeholder="WIADOMOŚĆ"><button type="submit">WYŚLIJ</button></form>
+      </div>
+    </section>
+    <section class="trade-request-modal hidden" id="tradeRequestModal" role="dialog" aria-modal="true"><div class="confirm-window"><p id="tradeRequestText">ZAPROSZENIE DO WYMIANY</p><div><button id="tradeAccept" type="button">ZAAKCEPTUJ</button><button id="tradeReject" type="button">ODRZUĆ</button></div></div></section>
+    <section class="trade-modal hidden" id="tradeModal" role="dialog" aria-modal="true">
+      <div class="trade-window">
+        <button id="tradeClose" class="shop-close" type="button">X</button>
+        <div class="eyebrow">ARCANE EXCHANGE</div><h3>WYMIANA</h3><p id="tradePartnerName"></p>
+        <div class="trade-columns"><div><h4>TOJA OFERTA</h4><div id="tradeOwnItems" class="trade-items"></div><label>MONETY<input id="tradeOwnCoins" type="number" min="0" value="0"></label></div><div><h4>OFERTA GRACZA</h4><div id="tradePartnerItems" class="trade-items"></div><strong id="tradePartnerCoins">MONETY: 0</strong></div></div>
+        <div class="trade-actions"><button id="tradeConfirm" type="button">ZAAKCEPTUJ</button><button id="tradeCancel" type="button">ODRZUĆ</button></div><p id="tradeStatus" class="trade-status"></p>
+      </div>
+    </section>
 
     <section class="hud hud-left">
       <div class="instrument">
@@ -187,6 +204,8 @@
       <div class="joystick" id="joystick" aria-label="Sterowanie ruchem"><div class="joystick-knob" id="joystickKnob"></div></div>
       <div class="touch-actions"><button id="touchCast" type="button">STRZAŁ</button><button id="touchAbility" type="button">GADŻET</button></div>
     </div>
+    <button id="chatButton" class="chat-button hidden" type="button">CZAT</button>
+    <div id="chatBubble" class="chat-bubble hidden"></div>
 
     <section class="status-bar">
       <div><span class="status-dot"></span><strong id="statusText">ALL SYSTEMS NOMINAL</strong></div>
@@ -293,9 +312,9 @@
         </div>
         <div class="mode-buttons">
           <button id="botButton">WALKA Z BOTEM <span>→</span></button>
-          <button id="botTwoVTwoButton" class="secondary" type="button">2 NA 2 Z BOTAMI <span>→</span></button>
-          <button id="botOneVTwoButton" class="secondary" type="button">1 NA 2 <span>→</span></button>
-          <button id="botOneVThreeButton" class="secondary" type="button">1 NA 3 <span>→</span></button>
+          <button id="botTwoVTwoButton" class="secondary" type="button">2 NA 2 GRACZE <span>→</span></button>
+          <button id="botOneVTwoButton" class="secondary" type="button">1 NA 2 GRACZE <span>→</span></button>
+          <button id="botOneVThreeButton" class="secondary" type="button">1 NA 3 GRACZE <span>→</span></button>
           <button id="playerButton" class="secondary">2 GRACZY <span>→</span></button>
           <button id="randomQueueButton" class="secondary" type="button">LOSOWA GRA <span>→</span></button>
         </div>
