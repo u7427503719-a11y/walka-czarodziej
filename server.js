@@ -25,6 +25,7 @@ const webSocketServer = new WebSocket.Server({ server });
 function send(socket, message) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
 function broadcast(room, sender, message) { room.forEach(socket => { if (socket !== sender) send(socket, message); }); }
 function leaveRoom(socket) { if (!socket.room) return; const room = rooms.get(socket.room); if (room) { room.delete(socket); if (!room.size) rooms.delete(socket.room); else broadcast(room, socket, { type: 'opponent-left' }); } socket.room = ''; }
+function finishRoom(socket) { if (!socket.room) return; const code = socket.room; const room = rooms.get(code); if (!room) { socket.room = ''; return; } room.forEach(player => { send(player, { type: 'round-ended' }); player.room = ''; }); rooms.delete(code); }
 
 webSocketServer.on('connection', socket => {
   socket.on('message', rawMessage => {
@@ -44,7 +45,8 @@ webSocketServer.on('connection', socket => {
       return;
     }
     if (!socket.room) return;
-    if (['state', 'spell', 'damage', 'game-over'].includes(message.type)) broadcast(rooms.get(socket.room), socket, message);
+    if (message.type === 'game-over') { finishRoom(socket); return; }
+    if (['state', 'spell', 'damage', 'reflect'].includes(message.type)) broadcast(rooms.get(socket.room), socket, message);
   });
   socket.on('close', () => leaveRoom(socket));
   socket.on('error', () => leaveRoom(socket));
