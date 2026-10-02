@@ -19,7 +19,8 @@ const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascr
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
-const ownerNick = 'adam2właściciel';
+const ownerNick = 'adam1';
+const previousOwnerNicks = ['adam1właściciel', 'adam2właściciel'];
 const ownerLoginAlias = 'adam';
 
 function readAccounts() {
@@ -30,6 +31,29 @@ function writeAccounts(accounts) {
   fs.mkdirSync(dataDirectory, { recursive: true });
   fs.writeFileSync(accountFile, JSON.stringify(accounts, null, 2));
 }
+
+function migrateOwnerAccount() {
+  const accounts = readAccounts();
+  const ownerKey = ownerNick.toLowerCase();
+  let owner = accounts[ownerKey];
+  if (!owner) {
+    const previousOwnerKey = previousOwnerNicks.map(nick => nick.toLowerCase()).find(key => accounts[key]);
+    if (previousOwnerKey) {
+      owner = accounts[previousOwnerKey];
+      delete accounts[previousOwnerKey];
+    }
+  }
+  if (!owner) owner = { nick: ownerNick, ...hashPassword('admin123') };
+  owner.nick = ownerNick;
+  owner.role = 'owner';
+  accounts[ownerKey] = owner;
+  for (const [key, account] of Object.entries(accounts)) {
+    if (key !== ownerKey && account?.role === 'owner') account.role = 'user';
+  }
+  writeAccounts(accounts);
+}
+
+migrateOwnerAccount();
 
 function readCareer() {
   try {
@@ -136,13 +160,10 @@ async function handleAuthRequest(request, response) {
     if (nick.length < 1 || nick.length > 16 || /[\u0000-\u001f]/.test(nick) || password.length < 4 || password.length > 128) {
       sendJson(response, 400, { error: 'NICK MUSI MIEĆ 1-16 ZNAKÓW, HASŁO 4-128 ZNAKÓW' }); return true;
     }
-    let account = accounts[key];
-    if (action === 'login' && [ownerNick, ownerLoginAlias].includes(key) && password === 'admin123') {
-      account = { ...(accounts[ownerNick] || {}), nick: ownerNick, ...hashPassword(password), role: 'owner' };
-      accounts[ownerNick] = account;
-    }
+    const lookupKey = action === 'login' && key === ownerLoginAlias ? ownerNick : key;
+    let account = accounts[lookupKey];
     if (action === 'register') {
-      if (key === ownerNick) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
+      if ([ownerNick, ownerLoginAlias].includes(key)) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
       if (account || activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
       const credentials = hashPassword(password);
       account = { nick, ...credentials, role: key === ownerNick ? 'owner' : 'user' };
