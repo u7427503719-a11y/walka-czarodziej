@@ -170,7 +170,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; logoutIntentional = false; const key = nick.toLowerCase(); const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? localStorage.getItem('arcanaCoins') ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateShop(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; logoutIntentional = false; const key = nick.toLowerCase(); const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateShop(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -242,7 +242,23 @@ function applyInactivePenalty() {
   localStorage.removeItem('arcanaCurrentUser');
 }
 function showAuthForm(form) { const register = form === 'register'; auth.registerForm.classList.toggle('hidden', !register); auth.loginForm.classList.toggle('hidden', register); auth.registerTab.classList.toggle('active', register); auth.loginTab.classList.toggle('active', !register); }
-async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); auth.registerNickError.textContent = ''; try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); accounts[key] = { ...(accounts[key] || {}), nick, role: remote.role, wizards: remote.wizards || [], serverSynced: true }; delete accounts[key].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
+function clearLocalAccountProgress(key) {
+  [
+    'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
+    'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
+    'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
+    'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
+    'arcanaFriendRequests', 'arcanaBans'
+  ].forEach(name => {
+    const map = getMap(name);
+    delete map[key];
+    saveMap(name, map);
+  });
+  const accounts = getAccounts();
+  delete accounts[key];
+  localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
+}
+async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = { nick: remote.nick, role: remote.role, wizards: remote.wizards || [], coins: 0, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
 async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const legacy = accounts[key]; const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const remote = await authRequest('login', { nick, password, legacyAccount: legacy?.password === password ? legacy : undefined }); const accountKey = remote.nick.toLowerCase(); accounts[accountKey] = { ...(accounts[accountKey] || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [], serverSynced: true }; delete accounts[accountKey].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.loginError.textContent = error.message; } }
 function ownerTarget() { const key = ownerUi.target.value.trim().toLowerCase(); return key; }
 function ownerResult(text) { ownerUi.message.textContent = text; }
