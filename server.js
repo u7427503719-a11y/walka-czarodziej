@@ -21,10 +21,27 @@ const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
 const ownerNick = 'adam1';
 const previousOwnerNicks = ['adam1właściciel', 'adam2właściciel'];
-const ownerLoginAlias = 'adam';
 
 function readAccounts() {
-  try { return JSON.parse(fs.readFileSync(accountFile, 'utf8')); } catch { return {}; }
+  let contents;
+  try { contents = fs.readFileSync(accountFile, 'utf8'); }
+  catch (error) {
+    if (error.code === 'ENOENT') return {};
+    throw error;
+  }
+  const accounts = JSON.parse(contents);
+  if (!accounts || typeof accounts !== 'object' || Array.isArray(accounts)) {
+    throw new Error('NIEPRAWIDŁOWY PLIK KONT');
+  }
+  return accounts;
+}
+
+function findAccountEntry(accounts, nick) {
+  const normalizedNick = String(nick || '').trim().toLowerCase();
+  if (accounts[normalizedNick]) return [normalizedNick, accounts[normalizedNick]];
+  return Object.entries(accounts).find(([key, account]) =>
+    String(account?.nick || key).trim().toLowerCase() === normalizedNick
+  ) || null;
 }
 
 function writeAccounts(accounts) {
@@ -130,7 +147,7 @@ function publicAccount(account) {
 }
 
 function verifyOwnerCredentials(nick, password, accounts) {
-  if (![ownerNick, ownerLoginAlias].includes(String(nick || '').trim().toLowerCase())) return false;
+  if (String(nick || '').trim().toLowerCase() !== ownerNick) return false;
   const account = accounts[ownerNick];
   if (!account?.salt || !account?.hash) return false;
   const actual = Buffer.from(hashPassword(String(password || ''), account.salt).hash, 'hex');
@@ -160,11 +177,11 @@ async function handleAuthRequest(request, response) {
     if (nick.length < 1 || nick.length > 16 || /[\u0000-\u001f]/.test(nick) || password.length < 4 || password.length > 128) {
       sendJson(response, 400, { error: 'NICK MUSI MIEĆ 1-16 ZNAKÓW, HASŁO 4-128 ZNAKÓW' }); return true;
     }
-    const lookupKey = action === 'login' && key === ownerLoginAlias ? ownerNick : key;
-    let account = accounts[lookupKey];
+    const accountEntry = findAccountEntry(accounts, nick);
+    let account = accountEntry?.[1];
     if (action === 'register') {
-      if ([ownerNick, ownerLoginAlias].includes(key)) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
-      if (account || activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
+      if (key === ownerNick) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
+      if (accountEntry || activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
       const credentials = hashPassword(password);
       account = { nick, ...credentials, role: key === ownerNick ? 'owner' : 'user' };
       accounts[key] = account;
@@ -188,7 +205,8 @@ async function handleAuthRequest(request, response) {
   }
 
   if (action === 'change-nick' || action === 'change-password') {
-    const account = accounts[String(input.currentNick || '').trim().toLowerCase()];
+    const accountEntry = findAccountEntry(accounts, input.currentNick);
+    const account = accountEntry?.[1];
     if (!account) { sendJson(response, 404, { error: 'NIE ZNALEZIONO KONTA' }); return true; }
     const actual = Buffer.from(hashPassword(String(input.currentPassword || ''), account.salt).hash, 'hex');
     const expected = Buffer.from(account.hash, 'hex');
@@ -197,8 +215,8 @@ async function handleAuthRequest(request, response) {
       const nextNick = String(input.newNick || '').trim();
       const nextKey = nextNick.toLowerCase();
       if (nextNick.length < 1 || nextNick.length > 16 || /[\u0000-\u001f]/.test(nextNick)) { sendJson(response, 400, { error: 'NICK MUSI MIEĆ 1-16 ZNAKÓW' }); return true; }
-      if (nextKey !== account.nick.toLowerCase() && (accounts[nextKey] || activeSocketsByNick.get(nextKey)?.readyState === WebSocket.OPEN)) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
-      delete accounts[account.nick.toLowerCase()];
+      if (nextKey !== account.nick.toLowerCase() && (findAccountEntry(accounts, nextNick) || activeSocketsByNick.get(nextKey)?.readyState === WebSocket.OPEN)) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
+      delete accounts[accountEntry[0]];
       account.nick = nextNick;
       accounts[nextKey] = account;
     } else {
