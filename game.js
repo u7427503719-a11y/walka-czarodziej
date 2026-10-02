@@ -33,7 +33,8 @@ careerUi.leagueList.innerHTML = rankedLeagueOrder.map(league => `<div class="ran
 let careerProgress = { month: '', wins: 0, boxes: 0, opening: false, rank: 'DREWNO 1', rankPoints: 0 };
 const chatUi = { button: document.getElementById('chatButton'), modal: document.getElementById('chatModal'), close: document.getElementById('chatClose'), form: document.getElementById('chatForm'), input: document.getElementById('chatInput'), bubble: document.getElementById('chatBubble') };
 const tradeUi = { requestModal: document.getElementById('tradeRequestModal'), requestText: document.getElementById('tradeRequestText'), accept: document.getElementById('tradeAccept'), reject: document.getElementById('tradeReject'), modal: document.getElementById('tradeModal'), close: document.getElementById('tradeClose'), cancel: document.getElementById('tradeCancel'), confirm: document.getElementById('tradeConfirm'), partnerName: document.getElementById('tradePartnerName'), ownItems: document.getElementById('tradeOwnItems'), partnerItems: document.getElementById('tradePartnerItems'), ownCoins: document.getElementById('tradeOwnCoins'), partnerCoins: document.getElementById('tradePartnerCoins'), status: document.getElementById('tradeStatus') };
-const OWNER_NICK = 'adam2właściciel';
+const OWNER_NICK = 'adam1';
+const PREVIOUS_OWNER_NICKS = ['adam1właściciel', 'adam2właściciel'];
 const OWNER_PASSWORD = 'admin123';
 const OWNER_NICKS = [OWNER_NICK];
 let currentUser = '';
@@ -48,14 +49,16 @@ async function authRequest(action, data) { let response; try { response = await 
 function getMap(name) { return JSON.parse(localStorage.getItem(name) || '{}'); }
 function saveMap(name, value) { localStorage.setItem(name, JSON.stringify(value)); }
 function ensureOwnerAccount() {
-  const accounts = getAccounts();
+  let accounts = getAccounts();
   const key = OWNER_NICK.toLowerCase();
+  if (!accounts[key]) {
+    const previousOwnerNick = PREVIOUS_OWNER_NICKS.find(nick => accounts[nick.toLowerCase()]);
+    if (previousOwnerNick) { moveAccountData(previousOwnerNick, OWNER_NICK); accounts = getAccounts(); }
+  }
+  PREVIOUS_OWNER_NICKS.forEach(nick => { const previousOwner = accounts[nick.toLowerCase()]; if (previousOwner) previousOwner.role = 'user'; });
   const bans = getMap('arcanaBans');
   delete bans[key];
   saveMap('arcanaBans', bans);
-
-  if (accounts.test123) accounts.test123.role = 'user';
-  if (accounts['adam1właściciel']) delete accounts['adam1właściciel'];
 
   if (!accounts[key]) {
     accounts[key] = { nick: OWNER_NICK, password: OWNER_PASSWORD, role: 'owner' };
@@ -70,10 +73,6 @@ function ensureOwnerAccount() {
   Object.keys(accounts).forEach(accountKey => {
     const account = accounts[accountKey];
     if (!account || typeof account !== 'object') return;
-    if (account.nick === 'adam1właściciel') {
-      delete accounts[accountKey];
-      return;
-    }
     if (account.role === 'owner' && accountKey !== key) {
       account.role = 'user';
     }
