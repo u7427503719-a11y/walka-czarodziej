@@ -45,6 +45,12 @@ function toggleOwnerPanel(forceCollapse) {
   ownerUi.toggle.textContent = collapsed ? 'ROZWIŃ' : 'ZWIŃ';
 }
 function getAccounts() { return JSON.parse(localStorage.getItem('arcanaAccounts') || '{}'); }
+function findLocalAccountEntryByNick(nick) {
+  const normalized = String(nick || '').trim().toLowerCase();
+  if (!normalized) return null;
+  const accounts = getAccounts();
+  return Object.entries(accounts).find(([key, account]) => key === normalized || String(account?.nick || '').trim().toLowerCase() === normalized) || null;
+}
 async function authRequest(action, data) { let response; try { response = await fetch(`/api/auth/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); } catch { throw new Error('BRAK POŁĄCZENIA Z SERWEREM // OTWÓRZ GRĘ Z ADRESU KOMPUTERA'); } let result; try { result = await response.json(); } catch { throw new Error('NIEPRAWIDŁOWA ODPOWIEDŹ SERWERA'); } if (!response.ok) throw new Error(result.error || 'BŁĄD LOGOWANIA'); return result.account; }
 function getMap(name) { return JSON.parse(localStorage.getItem(name) || '{}'); }
 function saveMap(name, value) { localStorage.setItem(name, JSON.stringify(value)); }
@@ -275,7 +281,7 @@ function normalizeLocalAccount(rawAccount = {}, fallbackNick = '') {
   normalized.serverSynced = true;
   return normalized;
 }
-async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
+async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; if (findLocalAccountEntryByNick(nick)) { auth.registerNickError.textContent = 'KONTO O TYM NICKU JUŻ ISTNIEJE'; return; } try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
 async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const legacy = accounts[key]; const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const legacyAccount = legacy?.nick?.trim().toLowerCase() === key && legacy.password === password ? { nick: legacy.nick, password: legacy.password } : undefined; const remote = await authRequest('login', { nick, password, ...(legacyAccount ? { legacyAccount } : {}) }); const accountKey = remote.nick.toLowerCase(); const merged = normalizeLocalAccount({ ...(accounts[accountKey] || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [], coins: Number(accounts[accountKey]?.coins ?? 0) }, remote.nick); accounts[accountKey] = merged; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { if (legacy && legacy.password && legacy.password !== password) { delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); } auth.loginError.textContent = error.message; } }
 function ownerTarget() { const key = ownerUi.target.value.trim().toLowerCase(); return key; }
 function ownerResult(text) { ownerUi.message.textContent = text; }
