@@ -19,8 +19,8 @@ const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascr
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
-const ownerNick = 'adam1';
-const previousOwnerNicks = ['adam1właściciel', 'adam2właściciel'];
+const ownerNick = 'adam';
+const previousOwnerNicks = ['adam1', 'adam1właściciel', 'adam2właściciel'];
 
 function readAccounts() {
   let contents;
@@ -54,7 +54,7 @@ function migrateOwnerAccount() {
   const ownerKey = ownerNick.toLowerCase();
   let owner = accounts[ownerKey];
   if (!owner) {
-    const previousOwnerKey = previousOwnerNicks.map(nick => nick.toLowerCase()).find(key => accounts[key]);
+    const previousOwnerKey = previousOwnerNicks.map(nick => nick.toLowerCase()).find(key => key !== ownerKey && accounts[key]);
     if (previousOwnerKey) {
       owner = accounts[previousOwnerKey];
       delete accounts[previousOwnerKey];
@@ -64,6 +64,10 @@ function migrateOwnerAccount() {
   owner.nick = ownerNick;
   owner.role = 'owner';
   accounts[ownerKey] = owner;
+  for (const nick of previousOwnerNicks) {
+    const key = nick.toLowerCase();
+    if (key !== ownerKey) delete accounts[key];
+  }
   for (const [key, account] of Object.entries(accounts)) {
     if (key !== ownerKey && account?.role === 'owner') account.role = 'user';
   }
