@@ -36,11 +36,15 @@ function readAccounts() {
   return accounts;
 }
 
+function normalizeNick(value) {
+  return String(value || '').trim();
+}
+
 function findAccountEntry(accounts, nick) {
-  const normalizedNick = String(nick || '').trim().toLowerCase();
+  const normalizedNick = normalizeNick(nick).toLowerCase();
   if (accounts[normalizedNick]) return [normalizedNick, accounts[normalizedNick]];
   return Object.entries(accounts).find(([key, account]) =>
-    String(account?.nick || key).trim().toLowerCase() === normalizedNick
+    normalizeNick(account?.nick || key).toLowerCase() === normalizedNick
   ) || null;
 }
 
@@ -172,7 +176,7 @@ async function handleAuthRequest(request, response) {
   let input;
   try { input = JSON.parse(body); } catch { sendJson(response, 400, { error: 'NIEPRAWIDŁOWE DANE' }); return true; }
   const action = request.url.split('?')[0].slice('/api/auth/'.length);
-  const nick = String(input.nick || '').trim();
+  const nick = normalizeNick(input.nick);
   const key = nick.toLowerCase();
   const password = String(input.password || '');
   const accounts = readAccounts();
@@ -191,7 +195,7 @@ async function handleAuthRequest(request, response) {
       accounts[key] = account;
     } else if (!account && input.legacyAccount?.nick?.toLowerCase() === key && input.legacyAccount.password === password) {
       const credentials = hashPassword(password);
-      account = { nick, ...credentials, role: input.legacyAccount.role === 'owner' && key === ownerNick ? 'owner' : input.legacyAccount.role === 'admin' ? 'admin' : 'user' };
+      account = { nick, ...credentials, role: 'user' };
       accounts[key] = account;
     } else if (!account) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true; }
     else {
