@@ -202,3 +202,7 @@ html, body { overflow-y: auto; overflow-x: hidden; }
 .leaderboard-list strong { color: var(--cyan); font: 700 15px 'Barlow Condensed'; }
 .leaderboard-status { min-height: 18px; margin-top: 12px; color: var(--orange); font-size: 10px; }
 @media (max-width: 560px) { .daily-mission-panel { grid-template-columns: 1fr; }.daily-mission-panel button { width: 100%; }.leaderboard-window { padding: 22px; } }
+
+.preview-exit { position: fixed; z-index: 10; top: 20px; right: 20px; padding: 11px 15px; border: 1px solid var(--orange); background: rgba(7,25,34,.9); color: var(--orange); cursor: pointer; font: 700 10px 'Space Grotesk'; letter-spacing: .1em; }
+.preview-exit:hover { background: rgba(255,176,75,.18); }
+@media (max-width: 560px) { .wizard-actions { flex-wrap: wrap; }.wizard-actions button { min-width: calc(50% - 4px); } .preview-exit { top: 12px; right: 12px; } }
