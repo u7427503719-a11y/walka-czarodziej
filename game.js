@@ -554,11 +554,17 @@ function drawMage(m, label) {
   ctx.save(); ctx.translate(m.x, m.y);
   const reflectTime = m === p1 ? p1.reflectShield : m === p2 ? p2.reflectShield : 0;
   const shieldTime = m === p1 ? p1.shield : 0;
+  const hpRatio = Math.max(0, Math.min(1, (m.hp || 0) / (m.maxHp || 1)));
+  const barWidth = 64;
   if (reflectTime > 0 || shieldTime > 0) {
     ctx.strokeStyle = reflectTime > 0 ? `rgba(255,190,86,${.5 + Math.sin(performance.now() / 120) * .18})` : `rgba(114,228,208,${.45 + Math.sin(performance.now() / 120) * .15})`;
     ctx.lineWidth = 4; ctx.shadowColor = reflectTime > 0 ? '#ffbe56' : '#72e4d0'; ctx.shadowBlur = 24;
     ctx.beginPath(); ctx.arc(0, 0, 68, 0, Math.PI * 2); ctx.stroke();
   }
+  ctx.fillStyle = 'rgba(8, 15, 24, 0.65)'; ctx.fillRect(-barWidth / 2, -78, barWidth, 9);
+  ctx.fillStyle = hpRatio > .6 ? '#6ce4b5' : hpRatio > .3 ? '#f6c76b' : '#ff7368'; ctx.fillRect(-barWidth / 2, -78, barWidth * hpRatio, 9);
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.strokeRect(-barWidth / 2, -78, barWidth, 9);
+  ctx.fillStyle = '#f4f7ff'; ctx.font = '700 9px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(`${Math.max(0, Math.ceil(m.hp || 0))}/${Math.ceil(m.maxHp || 1)}`, 0, -87);
   ctx.shadowColor = m.color; ctx.shadowBlur = 16; ctx.fillStyle = m.color; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
   const hatId = m === p1 ? getEquippedHat() : (m.hatId || (m === p2 ? opponentProfile.hatId : ''));
