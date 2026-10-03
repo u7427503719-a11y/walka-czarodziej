@@ -267,6 +267,7 @@
               <button class="wizard-card" data-wizard="cosmicobserver"><b>KOSMICZNY OBSERWATOR</b><span>7200 MONET</span></button>
               <button class="wizard-card" data-wizard="demonwanderer"><b>DEMONICZNY WĘDROWIEC</b><span>9000 MONET</span></button>
               <button class="wizard-card" data-wizard="sanctifier"><b>ŚWIĄTY LECZYCIEL</b><span>8200 MONET</span></button>
+              <button class="wizard-card" data-wizard="october"><b>PAŹDZIERNIK</b><span>POSTAĆ SPECJALNA</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
             <button id="chestsButton" class="chests-entry" type="button">OTWÓRZ SKRZYNIE <span>→</span></button>
@@ -274,7 +275,7 @@
               <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
               <h4 id="wizardName">ISKRA</h4>
               <p id="wizardPower">Moc zaklęcia: 12 | Tarcza: 100 | Cooldown: 0.30 s</p>
-              <div class="wizard-actions"><button id="buyButton">KUP</button><button id="useButton" class="secondary">UŻYJ</button><button id="exitButton" class="secondary">WYJDŹ</button></div>
+              <div class="wizard-actions"><button id="buyButton">KUP</button><button id="useButton" class="secondary">UŻYJ</button><button id="testWizardButton" class="secondary" type="button">PRZETESTUJ</button><button id="exitButton" class="secondary">WYJDŹ</button></div>
             </div>
           </div>
         </div>
@@ -309,7 +310,7 @@
             <button class="shop-close" id="chestClose" type="button">X</button>
             <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
             <h3>SKRZYNIE Z NAGRODAMI</h3>
-            <p class="chest-note">KAPELUSZE I BRELOCZKI SĄ LOSOWANE W ODDZIELNYCH SKRZYNIACH.</p>
+            <p class="chest-note">KAŻDA DZIENNA SKRZYNIA DAJE 100–1000 MONET ORAZ KAPELUSZ LUB BRELOCZEK (50% SZANSY NA KAŻDY RODZAJ).</p>
             <div class="daily-mission-panel">
               <div><strong id="dailyMissionProgress">WYGRANE DZISIAJ: 0/5</strong><span id="dailyBoxCount">DOSTĘPNE SKRZYNIE: 0/5</span><small id="dailyResetText">NOWE MISJE CODZIENNIE O 07:00 CZASU POLSKIEGO</small></div>
               <button id="dailyBoxOpenButton" type="button" disabled>OTWÓRZ SKRZYNIĘ DZIENNĄ</button>
@@ -351,6 +352,7 @@
     </section>
 
     <div class="toast" id="toast"></div>
+    <button id="previewExitButton" class="preview-exit hidden" type="button">ZAKOŃCZ TEST</button>
     <div class="rotate-prompt" id="rotatePrompt"><div><strong>OBRÓĆ URZĄDZENIE</strong><span>GRA WYMAGA UKŁADU POZIOMEGO</span></div></div>
   </main>
   <script src="game.js"></script>
