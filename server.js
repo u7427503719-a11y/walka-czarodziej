@@ -365,7 +365,7 @@ webSocketServer.on('connection', socket => {
         const items = kind === 'keychain'
           ? ['strength-charm', 'damage-charm', 'vitality-charm', 'life-charm', 'ward-charm']
           : ['strength-hat', 'guard-hat', 'light-hat'];
-        reward = { coins: 100, kind, itemId: items[Math.floor(Math.random() * items.length)] };
+        reward = { coins: Math.floor(Math.random() * 901) + 100, kind, itemId: items[Math.floor(Math.random() * items.length)] };
       }
       writeCareer(career);
       if (reward) send(socket, { type: 'daily-box-reward', reward });
