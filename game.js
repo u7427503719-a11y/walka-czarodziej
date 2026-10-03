@@ -33,8 +33,8 @@ careerUi.leagueList.innerHTML = rankedLeagueOrder.map(league => `<div class="ran
 let careerProgress = { month: '', wins: 0, boxes: 0, opening: false, rank: 'DREWNO 1', rankPoints: 0 };
 const chatUi = { button: document.getElementById('chatButton'), modal: document.getElementById('chatModal'), close: document.getElementById('chatClose'), form: document.getElementById('chatForm'), input: document.getElementById('chatInput'), bubble: document.getElementById('chatBubble') };
 const tradeUi = { requestModal: document.getElementById('tradeRequestModal'), requestText: document.getElementById('tradeRequestText'), accept: document.getElementById('tradeAccept'), reject: document.getElementById('tradeReject'), modal: document.getElementById('tradeModal'), close: document.getElementById('tradeClose'), cancel: document.getElementById('tradeCancel'), confirm: document.getElementById('tradeConfirm'), partnerName: document.getElementById('tradePartnerName'), ownItems: document.getElementById('tradeOwnItems'), partnerItems: document.getElementById('tradePartnerItems'), ownCoins: document.getElementById('tradeOwnCoins'), partnerCoins: document.getElementById('tradePartnerCoins'), status: document.getElementById('tradeStatus') };
-const OWNER_NICK = 'adam1';
-const PREVIOUS_OWNER_NICKS = ['adam1właściciel', 'adam2właściciel'];
+const OWNER_NICK = 'adam';
+const PREVIOUS_OWNER_NICKS = ['adam1', 'adam1właściciel', 'adam2właściciel'];
 const OWNER_PASSWORD = 'admin123';
 const OWNER_NICKS = [OWNER_NICK];
 let currentUser = '';
@@ -51,11 +51,17 @@ function saveMap(name, value) { localStorage.setItem(name, JSON.stringify(value)
 function ensureOwnerAccount() {
   let accounts = getAccounts();
   const key = OWNER_NICK.toLowerCase();
-  if (!accounts[key]) {
-    const previousOwnerNick = PREVIOUS_OWNER_NICKS.find(nick => accounts[nick.toLowerCase()]);
-    if (previousOwnerNick) { moveAccountData(previousOwnerNick, OWNER_NICK); accounts = getAccounts(); }
+  const legacyOwnerKeys = [...new Set([OWNER_NICK, ...PREVIOUS_OWNER_NICKS].map(nick => nick.toLowerCase()))];
+  const previousOwnerNick = legacyOwnerKeys.find(nick => nick !== key && accounts[nick]);
+  if (previousOwnerNick) {
+    moveAccountData(previousOwnerNick, OWNER_NICK);
+    accounts = getAccounts();
   }
-  PREVIOUS_OWNER_NICKS.forEach(nick => { const previousOwner = accounts[nick.toLowerCase()]; if (previousOwner) previousOwner.role = 'user'; });
+  legacyOwnerKeys.forEach(nick => {
+    const previousOwner = accounts[nick];
+    if (previousOwner && previousOwner.role === 'owner') previousOwner.role = 'user';
+    if (nick !== key) delete accounts[nick];
+  });
   const bans = getMap('arcanaBans');
   delete bans[key];
   saveMap('arcanaBans', bans);
