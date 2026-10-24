@@ -3730,3 +3730,104 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
+// === ARCANNA FIX: CLEAN LOGIN SCREEN ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Usuwamy WSZYSTKO co nie powinno być na ekranie logowania
+  function cleanLoginScreen() {
+
+    // stare zgłoś
+    const oldReport = document.querySelector("#reportBtn");
+    if (oldReport) oldReport.remove();
+
+    const oldReport2 = document.querySelector(".report-btn");
+    if (oldReport2) oldReport2.remove();
+
+    const oldReport3 = document.querySelector("#zgloś");
+    if (oldReport3) oldReport3.remove();
+
+    // przyciski admina
+    const adminBtn = document.querySelector(".admin-open-btn");
+    if (adminBtn) adminBtn.remove();
+
+    // przyciski pół-admina
+    const halfBtn = document.querySelector(".half-admin-open-btn");
+    if (halfBtn) halfBtn.remove();
+
+    // panele admina
+    const adminPanel = document.querySelector("#adminPanel");
+    if (adminPanel) adminPanel.remove();
+
+    // panele pół-admina
+    const halfPanel = document.querySelector("#halfPanel");
+    if (halfPanel) halfPanel.remove();
+  }
+
+  // Uruchamiamy czyszczenie ekranu logowania NATYCHMIAST
+  cleanLoginScreen();
+
+
+  // ============================================================
+  // FUNKCJA URUCHAMIANA PO ZALOGOWANIU
+  // ============================================================
+
+  window.afterLoginUI = function () {
+
+    // Jeśli nie ma użytkownika → nic nie pokazujemy
+    if (!currentUser || currentUser.trim() === "") return;
+
+    const role = userRoles[currentUser];
+
+    // NOWY przycisk zgłoś
+    const reportBtn = document.createElement('button');
+    reportBtn.textContent = "ZGŁOŚ";
+    reportBtn.style.position = "fixed";
+    reportBtn.style.right = "20px";
+    reportBtn.style.bottom = "20px";
+    reportBtn.style.zIndex = "9999";
+    reportBtn.style.padding = "12px 20px";
+    reportBtn.style.background = "#d32f2f";
+    reportBtn.style.color = "#fff";
+    reportBtn.style.border = "none";
+    reportBtn.style.borderRadius = "10px";
+    reportBtn.style.fontSize = "18px";
+    reportBtn.style.cursor = "pointer";
+    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
+    document.body.appendChild(reportBtn);
+
+    // PANELE WEDŁUG ROLI
+    if (role === "owner") {
+      // właściciel → tylko jego panel
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    if (role === "admin") {
+      // admin → tylko admin panel
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    if (role === "half-admin") {
+      // pół-admin → tylko pół-admin panel
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+      return;
+    }
+
+    // zwykły gracz → żadnych paneli
+    const adminBtn = document.querySelector(".admin-open-btn");
+    if (adminBtn) adminBtn.remove();
+
+    const halfBtn = document.querySelector(".half-admin-open-btn");
+    if (halfBtn) halfBtn.remove();
+  };
+
+})();
