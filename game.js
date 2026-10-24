@@ -3910,3 +3910,99 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
+// === ARCANNA: ONLY LOGIN WORKS BEFORE AUTH ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. USUWAMY WSZYSTKO CO NIE POWINNO BYĆ NA EKRANIE LOGOWANIA
+  // ============================================================
+
+  function cleanLoginScreen() {
+
+    // usuń stare zgłoś
+    document.querySelectorAll("#reportBtn, .report-btn, #zgloś").forEach(el => el.remove());
+
+    // usuń przyciski admina
+    document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
+
+    // usuń przyciski pół-admina
+    document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
+
+    // usuń panele admina
+    const adminPanel = document.querySelector("#adminPanel");
+    if (adminPanel) adminPanel.remove();
+
+    // usuń panele pół-admina
+    const halfPanel = document.querySelector("#halfPanel");
+    if (halfPanel) halfPanel.remove();
+
+    // usuń nowy przycisk zgłoś jeśli się pojawił
+    const newReport = document.querySelector("#newReportBtn");
+    if (newReport) newReport.remove();
+  }
+
+  // uruchamiamy czyszczenie NATYCHMIAST po wejściu na stronę
+  cleanLoginScreen();
+
+
+  // ============================================================
+  // 2. FUNKCJA URUCHAMIANA PO ZALOGOWANIU
+  // ============================================================
+
+  window.afterLoginUI = function () {
+
+    // jeśli nie ma użytkownika → nic nie pokazujemy
+    if (!currentUser || currentUser.trim() === "") return;
+
+    const role = userRoles[currentUser];
+
+    // ============================================================
+    // 3. DOPIERO TERAZ TWORZYMY PRZYCISK ZGŁOŚ
+    // ============================================================
+
+    const reportBtn = document.createElement('button');
+    reportBtn.id = "newReportBtn";
+    reportBtn.textContent = "ZGŁOŚ";
+    reportBtn.style.position = "fixed";
+    reportBtn.style.right = "20px";
+    reportBtn.style.bottom = "20px";
+    reportBtn.style.zIndex = "9999";
+    reportBtn.style.padding = "12px 20px";
+    reportBtn.style.background = "#d32f2f";
+    reportBtn.style.color = "#fff";
+    reportBtn.style.border = "none";
+    reportBtn.style.borderRadius = "10px";
+    reportBtn.style.fontSize = "18px";
+    reportBtn.style.cursor = "pointer";
+    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
+    document.body.appendChild(reportBtn);
+
+    // ============================================================
+    // 4. PANELE WEDŁUG ROLI
+    // ============================================================
+
+    if (role === "owner") {
+      // właściciel → tylko jego panel
+      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "admin") {
+      // admin → tylko admin panel
+      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "half-admin") {
+      // pół-admin → tylko pół-admin panel
+      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    // zwykły gracz → żadnych paneli
+    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+  };
+
+})();
