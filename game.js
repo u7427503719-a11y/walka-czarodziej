@@ -4247,3 +4247,149 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
+const skins = {
+    "yellow-purple": {
+        myColor: "yellow",
+        enemyColor: "purple",
+        price: 10000,
+        multiplier: 1.25
+    },
+    "green-pink": {
+        myColor: "green",
+        enemyColor: "pink",
+        price: 12500,
+        multiplier: 1.50
+    },
+    "blue-orange": {
+        myColor: "blue",
+        enemyColor: "orange",
+        price: 12000,
+        multiplier: 1.40
+    },
+    "white-black": {
+        myColor: "white",
+        enemyColor: "black",
+        price: 15000,
+        multiplier: 1.75
+    }
+};
+function applySkin(player, enemy, skinId) {
+    const skin = skins[skinId];
+    if (!skin) return;
+
+    player.color = skin.myColor;
+    enemy.color = skin.enemyColor;
+    player.damageMultiplier = skin.multiplier;
+}
+function buySkin(player, skinId) {
+    const skin = skins[skinId];
+    if (!skin) return "Skin nie istnieje";
+
+    if (!player.skinsOwned) player.skinsOwned = [];
+
+    if (player.skinsOwned.includes(skinId)) {
+        return "Masz już ten skin!";
+    }
+
+    if (player.coins < skin.price) {
+        return "Masz za mało monet!";
+    }
+
+    player.coins -= skin.price;
+    player.skinsOwned.push(skinId);
+
+    return "Kupiono skin!";
+}
+function registerAccount(nick, password, accounts) {
+    if (accounts[nick]) {
+        alert("Takie konto już istnieje!");
+        return false;
+    }
+
+    accounts[nick] = {
+        password: password,
+        coins: 0,
+        skinsOwned: []
+    };
+
+    return true;
+}
+const shopCategories = {
+    items: [],
+    boosts: [],
+    skins: [
+        {
+            id: "yellow-purple",
+            name: "Żółty – Fioletowy",
+            price: 10000,
+            multiplier: 1.25
+        },
+        {
+            id: "green-pink",
+            name: "Zielony – Różowy",
+            price: 12500,
+            multiplier: 1.50
+        },
+        {
+            id: "blue-orange",
+            name: "Granatowy – Pomarańczowy",
+            price: 12000,
+            multiplier: 1.40
+        },
+        {
+            id: "white-black",
+            name: "Biały – Czarny",
+            price: 15000,
+            multiplier: 1.75
+        }
+    ]
+};
+function showSkinShop(player) {
+    console.log("=== SKLEP: SKINY ===");
+
+    shopCategories.skins.forEach(skin => {
+        const owned = player.skinsOwned.includes(skin.id) ? " (POSIADASZ)" : "";
+        console.log(
+            `${skin.name} — ${skin.price} monet — mnożnik ${skin.multiplier}${owned}`
+        );
+    });
+}
+function buySkinFromShop(player, skinId) {
+    const skin = shopCategories.skins.find(s => s.id === skinId);
+    if (!skin) return "Skin nie istnieje";
+
+    if (player.skinsOwned.includes(skinId)) {
+        return "Masz już ten skin!";
+    }
+
+    if (player.coins < skin.price) {
+        return "Masz za mało monet!";
+    }
+
+    player.coins -= skin.price;
+    player.skinsOwned.push(skinId);
+
+    return "Kupiono skin!";
+}
+function applySkin(player, enemy, skinId) {
+    const skin = shopCategories.skins.find(s => s.id === skinId);
+    if (!skin) return;
+
+    player.color = skinId.split("-")[0];   // kolor gracza
+    enemy.color = skinId.split("-")[1];    // kolor przeciwnika
+    player.damageMultiplier = skin.multiplier;
+}
+function registerAccount(nick, password, accounts) {
+    if (accounts[nick]) {
+        alert("Takie konto już istnieje!");
+        return false;
+    }
+
+    accounts[nick] = {
+        password: password,
+        coins: 0,
+        skinsOwned: []
+    };
+
+    return true;
+}
