@@ -4006,3 +4006,244 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
+// === ARCANNA: ONLY LOGIN WORKS BEFORE AUTH ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. BLOKADA WSZYSTKICH FUNKCJI PRZED LOGOWANIEM
+  // ============================================================
+
+  // Ta funkcja usuwa TYLKO elementy, które nie powinny być na ekranie logowania.
+  // NIE usuwa niczego z formularza logowania ani przełącznika.
+  function cleanLoginScreen() {
+
+    // usuń przyciski zgłoś
+    document.querySelectorAll("#newReportBtn, #reportBtn, .report-btn").forEach(el => el.remove());
+
+    // usuń przyciski admina
+    document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
+
+    // usuń przyciski pół-admina
+    document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
+
+    // usuń panele admina
+    const adminPanel = document.querySelector("#adminPanel");
+    if (adminPanel) adminPanel.remove();
+
+    // usuń panele pół-admina
+    const halfPanel = document.querySelector("#halfPanel");
+    if (halfPanel) halfPanel.remove();
+  }
+
+  // Uruchamiamy czyszczenie NATYCHMIAST po wejściu na stronę
+  cleanLoginScreen();
+
+
+  // ============================================================
+  // 2. FUNKCJE WŁĄCZANE DOPIERO PO ZALOGOWANIU
+  // ============================================================
+
+  window.afterLoginUI = function () {
+
+    // jeśli nie ma użytkownika → nic nie pokazujemy
+    if (!currentUser || currentUser.trim() === "") return;
+
+    const role = userRoles[currentUser];
+
+    // ============================================================
+    // 3. NOWY PRZYCISK ZGŁOŚ — TYLKO PO ZALOGOWANIU
+    // ============================================================
+
+    const reportBtn = document.createElement('button');
+    reportBtn.id = "newReportBtn";
+    reportBtn.textContent = "ZGŁOŚ";
+    reportBtn.style.position = "fixed";
+    reportBtn.style.right = "20px";
+    reportBtn.style.bottom = "20px";
+    reportBtn.style.zIndex = "9999";
+    reportBtn.style.padding = "12px 20px";
+    reportBtn.style.background = "#d32f2f";
+    reportBtn.style.color = "#fff";
+    reportBtn.style.border = "none";
+    reportBtn.style.borderRadius = "10px";
+    reportBtn.style.fontSize = "18px";
+    reportBtn.style.cursor = "pointer";
+    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
+    document.body.appendChild(reportBtn);
+
+    // ============================================================
+    // 4. PANELE WEDŁUG ROLI
+    // ============================================================
+
+    if (role === "owner") {
+      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "admin") {
+      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "half-admin") {
+      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    // zwykły gracz → żadnych paneli
+    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+  };
+
+})();
+// === ARCANNA: HARD LOGIN PROTECTION ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. BLOKADA WSZYSTKIEGO PRZED LOGOWANIEM
+  // ============================================================
+
+  function blockEverythingBeforeLogin() {
+
+    // Usuwamy TYLKO elementy, które nie są częścią logowania
+    const forbiddenSelectors = [
+      ".admin-open-btn",
+      ".half-admin-open-btn",
+      "#adminPanel",
+      "#halfPanel",
+      "#newReportBtn",
+      "#reportBtn",
+      ".report-btn",
+      "#zgloś",
+      ".friends-modal",
+      ".friends-window"
+    ];
+
+    forbiddenSelectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => el.remove());
+    });
+  }
+
+  // Uruchamiamy blokadę NATYCHMIAST po wejściu na stronę
+  blockEverythingBeforeLogin();
+
+
+  // ============================================================
+  // 2. FUNKCJE WŁĄCZANE DOPIERO PO ZALOGOWANIU
+  // ============================================================
+
+  window.enableGameUI = function () {
+
+    if (!currentUser || currentUser.trim() === "") return;
+
+    const role = userRoles[currentUser];
+
+    // === NOWY przycisk zgłoś ===
+    const reportBtn = document.createElement("button");
+    reportBtn.id = "newReportBtn";
+    reportBtn.textContent = "ZGŁOŚ";
+    reportBtn.style.position = "fixed";
+    reportBtn.style.right = "20px";
+    reportBtn.style.bottom = "20px";
+    reportBtn.style.zIndex = "9999";
+    reportBtn.style.padding = "12px 20px";
+    reportBtn.style.background = "#d32f2f";
+    reportBtn.style.color = "#fff";
+    reportBtn.style.border = "none";
+    reportBtn.style.borderRadius = "10px";
+    reportBtn.style.fontSize = "18px";
+    reportBtn.style.cursor = "pointer";
+    document.body.appendChild(reportBtn);
+
+    // === PANELE WEDŁUG ROLI ===
+    if (role === "owner") {
+      // właściciel → tylko jego panel
+      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "admin") {
+      // admin → tylko admin panel
+      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    if (role === "half-admin") {
+      // pół-admin → tylko pół-admin panel
+      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
+      return;
+    }
+
+    // zwykły gracz → żadnych paneli
+    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
+  };
+
+})();
+// === ARCANNA: GLOBAL LOGIN LOCK ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // GLOBALNY LOCK — dopóki false, gra jest zablokowana
+  window.gameUnlocked = false;
+
+  // ============================================================
+  // 1. BLOKADA WSZYSTKICH FUNKCJI GRY PRZED LOGOWANIEM
+  // ============================================================
+
+  // Patchujemy funkcje gry, żeby nie działały przed logowaniem
+  const originalAddEventListener = EventTarget.prototype.addEventListener;
+
+  EventTarget.prototype.addEventListener = function (type, listener, options) {
+
+    // Jeśli gra jest zablokowana → blokujemy WSZYSTKO poza logowaniem
+    if (!window.gameUnlocked) {
+
+      // Jeśli to jest kliknięcie w formularz logowania → pozwalamy
+      const allowedIds = [
+    "loginBtn",
+    "registerBtn",
+    "loginSwitch",
+    "registerSwitch",
+    "loginTab",
+    "registerTab",
+    "loginToggle",
+    "registerToggle",
+    "loginMode",
+    "registerMode"
+];
+      if (this.id && allowedIds.includes(this.id)) {
+        return originalAddEventListener.call(this, type, listener, options);
+      }
+
+      // Blokujemy wszystkie inne eventy
+      return;
+    }
+
+    // Po odblokowaniu gra działa normalnie
+    return originalAddEventListener.call(this, type, listener, options);
+  };
+
+
+  // ============================================================
+  // 2. FUNKCJA ODPOWIADAJĄCA ZA ODBLOKOWANIE GRY
+  // ============================================================
+
+  window.unlockGame = function () {
+
+    // Użytkownik musi być zalogowany
+    if (!currentUser || currentUser.trim() === "") return;
+
+    // Odblokowujemy grę
+    window.gameUnlocked = true;
+
+    // Uruchamiamy UI gry
+    if (typeof window.enableGameUI === "function") {
+      window.enableGameUI();
+    }
+  };
+
+})();
