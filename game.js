@@ -3381,3 +3381,61 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   }
 
 })();
+// === ARCANNA FIX: REMOVE OLD REPORT BUTTON + OWNER PANELS ONLY ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. USUWANIE STAREGO PRZYCISKU "ZGŁOŚ"
+  // ============================================================
+
+  const oldReportBtn = document.querySelector("#reportBtn");
+  if (oldReportBtn) oldReportBtn.remove();
+
+  const oldReportBtn2 = document.querySelector(".report-btn");
+  if (oldReportBtn2) oldReportBtn2.remove();
+
+  const oldReportBtn3 = document.querySelector("#zgloś");
+  if (oldReportBtn3) oldReportBtn3.remove();
+
+
+  // ============================================================
+  // 2. WŁAŚCICIEL NIE MA PANELU ADMINA ANI PÓŁ-ADMINA
+  // ============================================================
+
+  // Ustawiamy role poprawnie
+  if (!window.userRoles) window.userRoles = {};
+
+  // Adam jest właścicielem
+  userRoles["adam"] = "owner";
+
+  // Jeśli Adam miał wcześniej admina lub pół-admina → usuwamy
+  if (userRoles[currentUser] === "admin" && currentUser === "adam") {
+    userRoles[currentUser] = "owner";
+  }
+
+  if (userRoles[currentUser] === "half-admin" && currentUser === "adam") {
+    userRoles[currentUser] = "owner";
+  }
+
+  // ============================================================
+  // 3. BLOKADA PANELI ADMINA I PÓŁ-ADMINA DLA WŁAŚCICIELA
+  // ============================================================
+
+  // Usuwamy przyciski otwierające panel admina/pół-admina
+  const adminOpenBtn = document.querySelector(".admin-open-btn");
+  if (adminOpenBtn && currentUser === "adam") adminOpenBtn.remove();
+
+  const halfOpenBtn = document.querySelector(".half-admin-open-btn");
+  if (halfOpenBtn && currentUser === "adam") halfOpenBtn.remove();
+
+  // Jeśli panel admina istnieje → ukryj go dla właściciela
+  const adminPanel = document.querySelector("#adminPanel");
+  if (adminPanel && currentUser === "adam") adminPanel.remove();
+
+  // Jeśli panel pół-admina istnieje → ukryj go dla właściciela
+  const halfPanel = document.querySelector("#halfPanel");
+  if (halfPanel && currentUser === "adam") halfPanel.remove();
+
+})();
