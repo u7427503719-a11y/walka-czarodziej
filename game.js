@@ -1,6 +1,7 @@
 //game js
 addEventListener('storage', event => { if (!matchRoomKey || event.key !== matchRoomKey || !event.newValue) return; const room = JSON.parse(event.newValue); if (room.started && room.players.length === 2 && !running) { joined = true; mode = 'player'; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; startGame('player'); } });
 const canvas = document.getElementById('gameCanvas');
+let rankingMode = "top20"; // albo "top10"
 const ctx = canvas.getContext('2d');
 const chestModal = document.getElementById('chestModal');
 const chestResult = document.getElementById('chestResult');
@@ -4393,3 +4394,286 @@ function registerAccount(nick, password, accounts) {
 
     return true;
 }
+function registerAccount(nick, password, accounts) {
+    if (accounts[nick]) {
+        alert("Takie konto już istnieje!");
+        return false;
+    }
+
+    accounts[nick] = {
+        password: password,
+        coins: 0,
+        skinsOwned: [],      // TU ZAPISUJEMY SKINY
+        selectedSkin: null   // TU ZAPISUJEMY WYBRANY SKIN
+    };
+
+    return true;
+}
+function buySkin(player, skinId) {
+    const skin = skins[skinId];
+    if (!skin) return "Skin nie istnieje";
+
+    if (!player.skinsOwned) player.skinsOwned = [];
+
+    if (player.skinsOwned.includes(skinId)) {
+        return "Masz już ten skin!";
+    }
+
+    if (player.coins < skin.price) {
+        return "Masz za mało monet!";
+    }
+
+    player.coins -= skin.price;
+    player.skinsOwned.push(skinId);   // ZAPIS SKINA NA KONCIE
+
+    return "Kupiono skin!";
+}
+function applySkin(player, enemy, skinId) {
+    const skin = skins[skinId];
+    if (!skin) return;
+
+    player.color = skin.myColor;
+    enemy.color = skin.enemyColor;
+    player.damageMultiplier = skin.multiplier;
+
+    player.selectedSkin = skinId;   // ZAPIS WYBRANEGO SKINA
+}
+function isLaptop() {
+    const ua = navigator.userAgent.toLowerCase();
+    return ua.includes("windows") || ua.includes("macintosh") || ua.includes("linux");
+}
+function shootBullet(player, enemy) {
+    let bullet = {
+        x: player.x,
+        y: player.y,
+        speed: 10,
+        autoAim: true
+    };
+
+    // jeśli laptop → autoAim = false
+    if (isLaptop()) {
+        bullet.autoAim = false;
+    }
+
+    bullets.push(bullet);
+}
+function updateBullet(bullet, enemy) {
+    if (bullet.autoAim) {
+        // auto namierzanie (telefon)
+        const dx = enemy.x - bullet.x;
+        const dy = enemy.y - bullet.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        bullet.x += (dx / dist) * bullet.speed;
+        bullet.y += (dy / dist) * bullet.speed;
+    } else {
+        // laptop → pocisk leci prosto
+        bullet.y -= bullet.speed;
+    }
+}
+const availableDevices = [
+    { id: "pc", name: "Laptop / Komputer", autoAim: false },
+    { id: "mobile", name: "Telefon", autoAim: true }
+];
+function changeDevice(player, deviceId) {
+    const device = availableDevices.find(d => d.id === deviceId);
+    if (!device) return "Urządzenie nie istnieje";
+
+    player.device = deviceId;
+    player.autoAim = device.autoAim;
+
+    return "Urządzenie zmienione!";
+}
+function showDeviceSelection(player) {
+    console.log("=== WYBÓR URZĄDZENIA ===");
+
+    availableDevices.forEach(device => {
+        const selected = player.device === device.id ? " (AKTUALNE)" : "";
+        console.log(`${device.name}${selected}`);
+    });
+
+    console.log("Użyj: changeDevice(player, 'pc') lub changeDevice(player, 'mobile')");
+}
+function openProfile(player) {
+    console.log("=== PROFIL ===");
+    console.log("Nick:", player.nick);
+    console.log("Monety:", player.coins);
+    console.log("Skiny:", player.skinsOwned);
+    console.log("Urządzenie:", player.device);
+    console.log("Kliknij: showDeviceSelection(player) aby zmienić urządzenie");
+}
+function shootBullet(player, enemy) {
+    let bullet = {
+        x: player.x,
+        y: player.y,
+        speed: 10,
+        autoAim: player.autoAim // zależy od urządzenia
+    };
+
+    bullets.push(bullet);
+}
+function updateBullet(bullet, enemy) {
+    if (bullet.autoAim) {
+        // telefon → auto namierzanie
+        const dx = enemy.x - bullet.x;
+        const dy = enemy.y - bullet.y;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+
+        bullet.x += (dx / dist) * bullet.speed;
+        bullet.y += (dy / dist) * bullet.speed;
+    } else {
+        // laptop → pocisk leci prosto
+        bullet.y -= bullet.speed;
+    }
+}
+let keyboardUsed = false;
+
+window.addEventListener("keydown", () => {
+    keyboardUsed = true;
+});
+function banPlayer(player, days) {
+    const now = Date.now();
+    const banTime = now + (days * 24 * 60 * 60 * 1000); // dni → ms
+
+    player.bannedUntil = banTime;
+}
+function isPlayerBanned(player) {
+    if (!player.bannedUntil) return false;
+    return Date.now() < player.bannedUntil;
+}
+function checkDeviceBan(player) {
+    if (player.device === "mobile" && keyboardUsed) {
+        banPlayer(player, 2);
+        alert("Zostałeś zbanowany na 2 dni za używanie klawiatury na urządzeniu mobilnym!");
+    }checkDeviceBan(player);
+}
+function blockIfBanned(player) {
+    if (isPlayerBanned(player)) {
+        alert("Twoje konto jest zbanowane na 2 dni. Poczekaj na zakończenie blokady.");
+        return true; // blokuje grę
+    }
+    return false;
+}
+if (blockIfBanned(player)) return;
+accounts[nick] = {
+    password: password,
+    coins: 0,
+    skinsOwned: [],
+    selectedSkin: null,
+    device: "pc",
+    loginAttempts: 0,        // ile razy źle wpisał hasło
+    loginBlockedUntil: null  // czas do którego jest blokada
+};
+function isLoginBlocked(account) {
+    if (!account.loginBlockedUntil) return false;
+    return Date.now() < account.loginBlockedUntil;
+}
+function login(nick, password, accounts) {
+    const account = accounts[nick];
+    if (!account) {
+        alert("Konto nie istnieje!");
+        return false;
+    }
+
+    // sprawdzamy czy jest blokada
+    if (isLoginBlocked(account)) {
+        alert("Za dużo błędnych prób! Spróbuj ponownie za 10 minut.");
+        return false;
+    }
+
+    // poprawne hasło
+    if (account.password === password) {
+        account.loginAttempts = 0;          // reset prób
+        return true;
+    }
+
+    // błędne hasło
+    account.loginAttempts++;
+
+    if (account.loginAttempts >= 4) {
+        account.loginBlockedUntil = Date.now() + (10 * 60 * 1000); // 10 minut
+        alert("Pomyliłeś hasło 4 razy! Blokada na 10 minut.");
+    } else {
+        alert("Złe hasło! Próba: " + account.loginAttempts + "/4");
+    }
+
+    return false;
+}
+function resetRanking(owner) {
+    if (!owner || owner.role !== "owner") {
+        alert("Tylko właściciel może resetować ranking!");
+        return;
+    }
+
+    ranking = []; // czyści cały ranking
+
+    alert("Ranking został zresetowany!");
+}
+function ownerPanel(owner) {
+    console.log("=== PANEL WŁAŚCICIELA ===");
+    console.log("1. Zbanuj gracza");
+    console.log("2. Odbanuj gracza");
+    console.log("3. Dodaj admina");
+    console.log("4. Dodaj pół-admina");
+    console.log("5. Resetuj konto gracza");
+    console.log("6. Resetuj ranking (drewno 1)");
+    console.log("7. Zwiń panel");
+
+}
+if (choice === 6) {
+    resetRanking(owner);
+}
+function resetRanking(owner, accounts) {
+    if (!owner || owner.role !== "owner") {
+        alert("Tylko właściciel może resetować ranking!");
+        return;
+    }
+
+    for (let nick in accounts) {
+        accounts[nick].rank = "drewno 1";   // ustawiamy rank
+        accounts[nick].points = 0;          // zerujemy punkty rankingu
+    }
+
+    alert("Ranking został zresetowany! Wszystkie konta mają teraz: drewno 1");
+}
+function updateRankingTable() {
+    // zamieniamy accounts na listę
+    let list = Object.keys(accounts).map(nick => {
+        return {
+            nick: nick,
+            rank: accounts[nick].rank,
+            points: accounts[nick].points
+        };
+    });
+
+    // sortowanie po punktach (od największych)
+    list.sort((a, b) => b.points - a.points);
+
+    // wybór trybu tabeli
+    let limit = rankingMode === "top20" ? 20 : 10;
+
+    // pobieramy top X
+    let topPlayers = list.slice(0, limit);
+
+    // wyświetlamy w tabeli
+    renderRanking(topPlayers);
+}
+function renderRanking(players) {
+    const rankingList = document.getElementById("rankingList");
+    rankingList.innerHTML = "";
+
+    players.forEach((p, index) => {
+        const row = document.createElement("div");
+        row.className = "friend-item";
+        row.innerHTML = `
+            <span><strong>${index + 1}.</strong> ${p.nick}</span>
+            <span>Rank: ${p.rank} | Punkty: ${p.points}</span>
+        `;
+        rankingList.appendChild(row);
+    });
+}
+
+if (mode === "ranked20") rankingMode = "top20";
+if (mode === "ranked10") rankingMode = "top10";
+
+updateRankingTable();
