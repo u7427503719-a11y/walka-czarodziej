@@ -1,3 +1,4 @@
+//game js
 addEventListener('storage', event => { if (!matchRoomKey || event.key !== matchRoomKey || !event.newValue) return; const room = JSON.parse(event.newValue); if (room.started && room.players.length === 2 && !running) { joined = true; mode = 'player'; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; startGame('player'); } });
 const canvas = document.getElementById('gameCanvas');
 const ctx = canvas.getContext('2d');
@@ -153,7 +154,8 @@ function applyDailyBoxReward(reward) {
   careerUi.chestResult.textContent = `+${Number(reward.coins) || 0} MONET${itemName ? ` // ${itemName} DODANY DO PLECAKA` : ''}`;
   updateShop();
 }
-function drawAvatar(canvas, imageData, nick) { const context = canvas.getContext('2d'); context.clearRect(0, 0, canvas.width, canvas.height); context.fillStyle = '#15323a'; context.fillRect(0, 0, canvas.width, canvas.height); if (imageData) { const image = new Image(); image.onload = () => context.drawImage(image, 0, 0, canvas.width, canvas.height); image.src = imageData; } else { context.fillStyle = '#73e1dd'; context.font = `700 ${canvas.width * .44}px Space Grotesk`; context.textAlign = 'center'; context.textBaseline = 'middle'; context.fillText((nick || '?').slice(0, 1).toUpperCase(), canvas.width / 2, canvas.height / 2); } }
+
+
 function updateTitleChoices() { const wins = getMap('arcanaWizardWins')[currentUser.toLowerCase()] || {}; const selected = getMap('arcanaSelectedTitle')[currentUser.toLowerCase()] || ''; const earned = Object.keys(wins).filter(id => wins[id] >= 500 && wizards[id]); profileUi.title.innerHTML = '<option value="">BRAK TYTUŁU</option>' + earned.map(id => `<option value="${id}">${wizardTitles[id]}</option>`).join(''); profileUi.title.value = earned.includes(selected) ? selected : ''; }
 function updateProfile() { if (!currentUser) return; const key = currentUser.toLowerCase(); const equipped = getEquippedKeychains(); const dropMap = getMap('arcanaDropCharm'); const previous = dropMap[key]; profileUi.dropCharm.innerHTML = equipped.length ? equipped.map(id => `<option value="${id}">${keychains[id].name}</option>`).join('') : '<option value="">BRAK ZAŁOŻONYCH BRELOCZKÓW</option>'; profileUi.dropCharm.disabled = equipped.length === 0; profileUi.dropCharm.value = equipped.includes(previous) ? previous : (equipped[0] || ''); if (equipped.length && !equipped.includes(previous)) { dropMap[key] = equipped[0]; saveMap('arcanaDropCharm', dropMap); } profileUi.dropEnabled.checked = Boolean(getMap('arcanaDropEnabled')[key]); profileUi.dropEnabled.disabled = equipped.length === 0; updateTitleChoices(); }
 function openProfile() { const key = currentUser.toLowerCase(); profileUi.name.textContent = getAccounts()[key]?.nick || currentUser; profileUi.modal.classList.remove('hidden'); updateProfile(); updateAccountDirectory(); const avatar = getMap('arcanaAvatars')[key] || ''; drawAvatar(profileUi.avatar, avatar, currentUser); drawAvatar(profileUi.editor, avatar, currentUser); }
@@ -734,3 +736,2319 @@ ownerUi.grantOctober.addEventListener('click', grantOctoberWizard);
 function startBotMode() { leaveMatchConnection(); startGame('bot'); }
 addEventListener('resize', resize); addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.bot.addEventListener('click', startBotMode); ui.player.addEventListener('click', () => startCodeMatch()); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); resize(); reset(); updateShop(); requestAnimationFrame(frame);
 auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth.loginTab.addEventListener('click', () => showAuthForm('login')); auth.registerForm.addEventListener('submit', registerAccount); auth.loginForm.addEventListener('submit', loginAccount); ui.logout.addEventListener('click', logoutAccount); ownerUi.toggle.addEventListener('click', () => toggleOwnerPanel()); ownerUi.addAdmin.addEventListener('click', addAdmin); ownerUi.ban.addEventListener('click', () => changeBan(true)); ownerUi.unban.addEventListener('click', () => changeBan(false)); ownerUi.giveCoins.addEventListener('click', giveCoins); ownerUi.giveWizard.addEventListener('click', giveWizard); ui.friendsButton.addEventListener('click', () => { setFriendsTab('friends'); ui.friendsModal.classList.remove('hidden'); ui.inviteMessage.textContent = ''; updateFriends(); }); ui.friendsTab.addEventListener('click', () => setFriendsTab('friends')); ui.requestsTab.addEventListener('click', () => setFriendsTab('requests')); ui.suggestionsTab.addEventListener('click', () => setFriendsTab('suggestions')); ui.friendsClose.addEventListener('click', () => ui.friendsModal.classList.add('hidden')); ui.sendInvite.addEventListener('click', sendFriendInvite); ui.suggestionsList.addEventListener('click', event => { const accept = event.target.closest('[data-accept]'); const reject = event.target.closest('[data-reject]'); if (accept) respondToFriendInvite(decodeURIComponent(accept.dataset.accept), true); if (reject) respondToFriendInvite(decodeURIComponent(reject.dataset.reject), false); }); addEventListener('beforeunload', applyInactivePenalty); addEventListener('pagehide', event => { if (!event.persisted) applyInactivePenalty(); }); ensureOwnerAccount(); showAuthForm('register');
+// === ARCANNA GLOBAL PATCH: OWNER, FRIENDS, TRADE ===
+// Ten blok możesz wkleić pod całym game.js. Nadpisuje stare funkcje.
+
+(function () {
+  // Bezpieczne sprawdzenie, czy mamy fetch i WebSocket
+  const hasFetch = typeof fetch === 'function';
+
+  // -------- OWNER PANEL (globalne konta) --------
+
+  if (typeof verifyOwnerPassword === 'function') {
+    const originalVerifyOwnerPassword = verifyOwnerPassword;
+
+    verifyOwnerPassword = function () {
+      if (!hasFetch || !window.ownerUi || !window.currentUser) {
+        return originalVerifyOwnerPassword();
+      }
+
+      const nick = currentUser;
+      const password = ownerUi.password.value.trim();
+
+      fetch('/api/owner/verify-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ownerNick: nick, password })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.verified) {
+          window.ownerPasswordVerified = true;
+          window.verifiedOwnerPassword = password;
+          ownerUi.grantOctober.classList.remove('hidden');
+          ownerUi.message.textContent = 'HASŁO POPRAWNE';
+        } else {
+          ownerUi.message.textContent = 'BŁĘDNE HASŁO';
+        }
+      })
+      .catch(() => ownerUi.message.textContent = 'BŁĄD SERWERA');
+    };
+  }
+
+  if (typeof grantOctoberWizard === 'function') {
+    const originalGrantOctoberWizard = grantOctoberWizard;
+
+    grantOctoberWizard = function () {
+      if (!hasFetch || !window.ownerUi || !window.currentUser) {
+        return originalGrantOctoberWizard();
+      }
+
+      if (!window.ownerPasswordVerified || !window.verifiedOwnerPassword) {
+        ownerUi.message.textContent = 'NAJPIERW ZWERYFIKUJ HASŁO';
+        return;
+      }
+
+      const targetNick = ownerUi.targetNick.value.trim();
+
+      fetch('/api/owner/grant-wizard', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ownerNick: currentUser,
+          password: verifiedOwnerPassword,
+          targetNick
+        })
+      })
+      .then(res => res.json())
+      .then(data => {
+        if (data.account) {
+          ownerUi.message.textContent = `DODANO CZARODZIEJA DLA: ${data.account.nick}`;
+        } else {
+          ownerUi.message.textContent = data.error || 'BŁĄD';
+        }
+      })
+      .catch(() => ownerUi.message.textContent = 'BŁĄD SERWERA');
+    };
+  }
+
+  // -------- FRIENDS (globalne konta) --------
+
+  if (typeof sendFriendInvite === 'function') {
+    const originalSendFriendInvite = sendFriendInvite;
+
+    sendFriendInvite = function () {
+      if (!hasFetch || !window.ui || !window.connectMatchSocket || !window.sendNetwork) {
+        return originalSendFriendInvite();
+      }
+
+      const nick = ui.inviteNick.value.trim();
+      ui.inviteMessage.textContent = '';
+
+      if (!nick) {
+        ui.inviteMessage.textContent = 'PODAJ NICK GRACZA';
+        return;
+      }
+
+      // Nie sprawdzamy lokalnych kont – po prostu wysyłamy zaproszenie
+      connectMatchSocket(() => {
+        sendNetwork({ type: 'friend-request', targetNick: nick });
+      });
+
+      ui.inviteMessage.textContent = 'ZAPROSZENIE WYSŁANE';
+      ui.inviteNick.value = '';
+    };
+  }
+
+  // -------- TRADE (globalne konta) --------
+
+  if (typeof sendTradeRequest === 'function') {
+    const originalSendTradeRequest = sendTradeRequest;
+
+    sendTradeRequest = function (nick) {
+      if (!window.connectMatchSocket || !window.sendNetwork) {
+        return originalSendTradeRequest(nick);
+      }
+
+      const targetNick = String(nick || '').trim();
+      if (!targetNick) return;
+
+      connectMatchSocket(() => {
+        sendNetwork({ type: 'trade-request', targetNick });
+      });
+
+      if (typeof setToast === 'function') {
+        setToast('PROŚBA O WYMIANĘ WYSŁANA');
+      }
+    };
+  }
+
+  if (typeof openTrade === 'function') {
+    const originalOpenTrade = openTrade;
+
+    openTrade = function (partner) {
+      if (!window.tradeUi) {
+        return originalOpenTrade(partner);
+      }
+
+      window.tradeState = {
+        partner,
+        ownItems: [],
+        partnerItems: [],
+        ownCoins: 0,
+        partnerCoins: 0,
+        accepted: false
+      };
+
+      tradeUi.partnerName.textContent = `GRACZ: ${partner}`;
+      tradeUi.status.textContent = '';
+      if (typeof renderTrade === 'function') renderTrade();
+      tradeUi.modal.classList.remove('hidden');
+
+      if (typeof sendTradeOffer === 'function') {
+        sendTradeOffer();
+      }
+    };
+  }
+
+})();
+// === AUTO-HIDE LOGOUT MESSAGE (5 SECONDS) ===
+// Wklej ten blok NA SAM DÓŁ game.js
+
+(function () {
+
+  // Jeśli gra używa setToast() do wyświetlania komunikatów,
+  // to nadpisujemy ją tak, aby komunikat znikał po 5 sekundach.
+
+  if (typeof setToast === 'function') {
+    const originalSetToast = setToast;
+
+    setToast = function (text) {
+      // wyświetlamy komunikat normalnie
+      originalSetToast(text);
+
+      // jeśli istnieje element toastEl, ustawiamy timer
+      if (window.toastEl) {
+        clearTimeout(window._toastTimer);
+
+        window._toastTimer = setTimeout(() => {
+          toastEl.classList.remove('show');
+        }, 5000); // 5 sekund
+      }
+    };
+  }
+
+})();
+// === ARCANNA MOBILE PATCH: BLOCK SCROLL IN GAME, ALLOW IN LOBBY ===
+// Wklej ten blok NA SAMYM DOLE game.js
+
+(function () {
+
+  // Funkcja blokująca przewijanie ekranu
+  function blockScroll() {
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    window.scrollTo(0, 0);
+  }
+
+  // Funkcja odblokowująca przewijanie ekranu
+  function allowScroll() {
+    document.body.style.overflow = '';
+    document.documentElement.style.overflow = '';
+  }
+
+  // Nasłuch na zmiany ekranu gry
+  const observer = new MutationObserver(() => {
+    const inLobby =
+      document.querySelector('.start-screen') &&
+      !document.querySelector('.start-screen').classList.contains('hidden');
+
+    const inGame =
+      document.querySelector('.game-shell') &&
+      !document.querySelector('.start-screen')?.classList.contains('hidden');
+
+    // Jeśli jesteś w lobby → można przewijać
+    if (inLobby) {
+      allowScroll();
+    }
+
+    // Jeśli jesteś w grze → blokujemy przewijanie
+    if (!inLobby) {
+      blockScroll();
+    }
+  });
+
+  // Obserwujemy cały dokument
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Dodatkowe zabezpieczenie — blokada scrolla podczas gry
+  window.addEventListener('touchmove', function (e) {
+    const inLobby =
+      document.querySelector('.start-screen') &&
+      !document.querySelector('.start-screen').classList.contains('hidden');
+
+    if (!inLobby) {
+      e.preventDefault();
+    }
+  }, { passive: false });
+
+})();
+
+// === ARCANNA RANKING MODULE: TOP 10 / TOP 20 KILLS / TOP 10 WINS ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Tworzymy okno rankingu jeśli go nie ma
+  let rankingModal = document.getElementById('rankingModal');
+  if (!rankingModal) {
+    rankingModal = document.createElement('div');
+    rankingModal.id = 'rankingModal';
+    rankingModal.className = 'friends-modal'; // używamy stylu modalnego
+    rankingModal.innerHTML = `
+      <div class="friends-window" style="max-width:480px;">
+        <h3>RANKING</h3>
+
+        <div class="friends-tabs" id="rankingTabs">
+          <button data-mode="ranked" class="active">TOP 10 RANKED</button>
+          <button data-mode="kills">TOP 20 KILLE</button>
+          <button data-mode="wins">TOP 10 WYGRANE</button>
+        </div>
+
+        <div id="rankingList" class="friends-list"></div>
+
+        <button id="rankingClose" style="margin-top:12px;">ZAMKNIJ</button>
+      </div>
+    `;
+    document.body.appendChild(rankingModal);
+  }
+
+  const rankingTabs = rankingModal.querySelector('#rankingTabs');
+  const rankingList = rankingModal.querySelector('#rankingList');
+  const rankingClose = rankingModal.querySelector('#rankingClose');
+
+  rankingClose.onclick = () => {
+    rankingModal.classList.add('hidden');
+  };
+
+  // Funkcja pobierająca ranking z serwera
+  function fetchRanking(mode) {
+    fetch('/api/ranking/' + mode)
+      .then(res => res.json())
+      .then(data => {
+        renderRanking(data, mode);
+      })
+      .catch(() => {
+        rankingList.innerHTML = `<div class="friends-empty">BŁĄD ŁADOWANIA RANKINGU</div>`;
+      });
+  }
+
+  // Renderowanie tabeli
+  function renderRanking(data, mode) {
+    rankingList.innerHTML = '';
+
+    if (!Array.isArray(data) || data.length === 0) {
+      rankingList.innerHTML = `<div class="friends-empty">BRAK DANYCH</div>`;
+      return;
+    }
+
+    data.forEach((player, index) => {
+      const row = document.createElement('div');
+      row.className = 'friend-item';
+      row.innerHTML = `
+        <span><strong>${index + 1}.</strong> ${player.nick}</span>
+        <span>
+          ${
+            mode === 'ranked'
+              ? `RP: ${player.rankPoints}`
+              : mode === 'kills'
+              ? `KILLE: ${player.kills}`
+              : `WYGRANE: ${player.wins}`
+          }
+        </span>
+      `;
+      rankingList.appendChild(row);
+    });
+  }
+
+  // Obsługa przełączania zakładek
+  rankingTabs.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+
+    rankingTabs.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+    e.target.classList.add('active');
+
+    const mode = e.target.dataset.mode;
+    fetchRanking(mode);
+  });
+
+  // Funkcja otwierająca ranking
+  window.openRanking = function () {
+    rankingModal.classList.remove('hidden');
+    fetchRanking('ranked'); // domyślnie ranking
+  };
+
+})();
+// === ARCANNA RANKING MODULE: TOP 20 KILLS ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Tworzymy okno rankingu jeśli go nie ma
+  let killsModal = document.getElementById('killsModal');
+  if (!killsModal) {
+    killsModal = document.createElement('div');
+    killsModal.id = 'killsModal';
+    killsModal.className = 'friends-modal'; // używamy stylu modalnego
+    killsModal.innerHTML = `
+      <div class="friends-window" style="max-width:480px;">
+        <h3>TOP 20 KILLE</h3>
+
+        <div id="killsList" class="friends-list"></div>
+
+        <button id="killsClose" style="margin-top:12px;">ZAMKNIJ</button>
+      </div>
+    `;
+    document.body.appendChild(killsModal);
+  }
+
+  const killsList = killsModal.querySelector('#killsList');
+  const killsClose = killsModal.querySelector('#killsClose');
+
+  killsClose.onclick = () => {
+    killsModal.classList.add('hidden');
+  };
+
+  // Pobieranie danych z serwera
+  function fetchKillsRanking() {
+    fetch('/api/ranking/kills')
+      .then(res => res.json())
+      .then(data => {
+        renderKillsRanking(data);
+      })
+      .catch(() => {
+        killsList.innerHTML = `<div class="friends-empty">BŁĄD ŁADOWANIA RANKINGU</div>`;
+      });
+  }
+
+  // Renderowanie tabeli
+  function renderKillsRanking(data) {
+    killsList.innerHTML = '';
+
+    if (!Array.isArray(data) || data.length === 0) {
+      killsList.innerHTML = `<div class="friends-empty">BRAK DANYCH</div>`;
+      return;
+    }
+
+    data.forEach((player, index) => {
+      const row = document.createElement('div');
+      row.className = 'friend-item';
+      row.innerHTML = `
+        <span><strong>${index + 1}.</strong> ${player.nick}</span>
+        <span>KILLE: ${player.kills}</span>
+      `;
+      killsList.appendChild(row);
+    });
+  }
+
+  // Funkcja otwierająca ranking killów
+  window.openKillsRanking = function () {
+    killsModal.classList.remove('hidden');
+    fetchKillsRanking();
+  };
+
+})();
+// === ARCANNA SHOP MODULE: POSTACIE / BRELOCZKI / KAPELUSZE ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Znajdujemy okno sklepu
+  const shopWindow = document.querySelector('.shop-window');
+  if (!shopWindow) return;
+
+  // Tworzymy zakładki u góry sklepu
+  const tabs = document.createElement('div');
+  tabs.className = 'mode-buttons';
+  tabs.style.marginBottom = '14px';
+
+  tabs.innerHTML = `
+    <button data-shop="characters" class="active">POSTACIE</button>
+    <button data-shop="keychains">BRELOCZKI</button>
+    <button data-shop="hats">KAPELUSZE</button>
+  `;
+
+  // Wstawiamy zakładki na górę sklepu
+  shopWindow.insertBefore(tabs, shopWindow.firstChild);
+
+  // Tworzymy kontenery na zawartość
+  const charactersSection = document.createElement('div');
+  const keychainsSection = document.createElement('div');
+  const hatsSection = document.createElement('div');
+
+  charactersSection.id = 'shopCharacters';
+  keychainsSection.id = 'shopKeychains';
+  hatsSection.id = 'shopHats';
+
+  charactersSection.innerHTML = `<div class="wizard-offers"></div>`;
+  keychainsSection.innerHTML = `<div class="keychain-collection"></div>`;
+  hatsSection.innerHTML = `<div class="backpack-empty"><strong>Brak kapeluszy</strong><span>Otwórz skrzynki aby zdobyć!</span></div>`;
+
+  // Dodajemy sekcje do sklepu
+  shopWindow.appendChild(charactersSection);
+  shopWindow.appendChild(keychainsSection);
+  shopWindow.appendChild(hatsSection);
+
+  // Domyślnie widoczna sekcja POSTACIE
+  keychainsSection.style.display = 'none';
+  hatsSection.style.display = 'none';
+
+  // Obsługa przełączania zakładek
+  tabs.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+
+    tabs.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
+    e.target.classList.add('active');
+
+    const mode = e.target.dataset.shop;
+
+    if (mode === 'characters') {
+      charactersSection.style.display = 'block';
+      keychainsSection.style.display = 'none';
+      hatsSection.style.display = 'none';
+    }
+
+    if (mode === 'keychains') {
+      charactersSection.style.display = 'none';
+      keychainsSection.style.display = 'block';
+      hatsSection.style.display = 'none';
+    }
+
+    if (mode === 'hats') {
+      charactersSection.style.display = 'none';
+      keychainsSection.style.display = 'none';
+      hatsSection.style.display = 'block';
+    }
+  });
+
+  // Automatyczne ładowanie danych postaci
+  window.loadShopCharacters = function (data) {
+    const container = charactersSection.querySelector('.wizard-offers');
+    container.innerHTML = '';
+
+    data.forEach(w => {
+      const card = document.createElement('button');
+      card.className = 'wizard-card';
+      card.innerHTML = `
+        <b>${w.name}</b>
+        <span>${w.desc}</span>
+      `;
+      container.appendChild(card);
+    });
+  };
+
+  // Automatyczne ładowanie breloczków
+  window.loadShopKeychains = function (data) {
+    const container = keychainsSection.querySelector('.keychain-collection');
+    container.innerHTML = '';
+
+    data.forEach(k => {
+      const card = document.createElement('div');
+      card.className = 'keychain-card';
+      card.innerHTML = `
+        <b>${k.name}</b>
+        <span>${k.desc}</span>
+      `;
+      container.appendChild(card);
+    });
+  };
+
+})();
+// === ARCANNA MESSAGE MODULE: VISIBLE TO ENEMY + FLOATING WITH PLAYER ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Kontener na wiadomości w grze
+  let messageLayer = document.getElementById('messageLayer');
+  if (!messageLayer) {
+    messageLayer = document.createElement('div');
+    messageLayer.id = 'messageLayer';
+    messageLayer.style.position = 'absolute';
+    messageLayer.style.left = '0';
+    messageLayer.style.top = '0';
+    messageLayer.style.width = '100%';
+    messageLayer.style.height = '100%';
+    messageLayer.style.pointerEvents = 'none';
+    messageLayer.style.zIndex = '50';
+    document.body.appendChild(messageLayer);
+  }
+
+  // Tworzenie dymku wiadomości
+  function createMessageBubble(nick, text) {
+    const bubble = document.createElement('div');
+    bubble.className = 'msgBubble';
+    bubble.style.position = 'absolute';
+    bubble.style.padding = '6px 10px';
+    bubble.style.background = 'rgba(0,0,0,0.65)';
+    bubble.style.color = '#fff';
+    bubble.style.borderRadius = '8px';
+    bubble.style.fontSize = '12px';
+    bubble.style.pointerEvents = 'none';
+    bubble.style.transition = 'opacity 0.4s ease';
+    bubble.style.opacity = '1';
+    bubble.innerHTML = `<strong>${nick}:</strong> ${text}`;
+
+    messageLayer.appendChild(bubble);
+
+    // Usuwanie po 4 sekundach
+    setTimeout(() => {
+      bubble.style.opacity = '0';
+      setTimeout(() => bubble.remove(), 400);
+    }, 4000);
+
+    return bubble;
+  }
+
+  // Aktualizacja pozycji dymków
+  function updateMessagePositions(players) {
+    const bubbles = document.querySelectorAll('.msgBubble');
+
+    bubbles.forEach(bubble => {
+      const nick = bubble.dataset.nick;
+      const player = players[nick];
+
+      if (!player) return;
+
+      const x = player.x;
+      const y = player.y - 40; // nad głową
+
+      bubble.style.left = x + 'px';
+      bubble.style.top = y + 'px';
+    });
+  }
+
+  // Nasłuch wiadomości z serwera
+  if (typeof connectMatchSocket === 'function') {
+    const originalConnect = connectMatchSocket;
+
+    connectMatchSocket = function (cb) {
+      originalConnect(() => {
+        // odbieranie wiadomości
+        matchSocket.onmessage = (msg) => {
+          const data = JSON.parse(msg.data);
+
+          if (data.type === 'chat') {
+            const bubble = createMessageBubble(data.nick, data.text);
+            bubble.dataset.nick = data.nick;
+          }
+
+          if (cb) cb(data);
+        };
+      });
+    };
+  }
+
+  // Wysyłanie wiadomości
+  window.sendGameMessage = function (text) {
+    if (!window.matchSocket) return;
+
+    sendNetwork({
+      type: 'chat',
+      text,
+      nick: currentUser
+    });
+
+    const bubble = createMessageBubble(currentUser, text);
+    bubble.dataset.nick = currentUser;
+  };
+
+  // Aktualizacja pozycji dymków co klatkę
+  setInterval(() => {
+    if (window.players) {
+      updateMessagePositions(window.players);
+    }
+  }, 50);
+
+})();
+// === ARCANNA ANTI-CHEAT MODULE ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Konto odporne na anty-cheat
+  const immuneAccount = "adam";
+
+  // Maksymalna dozwolona prędkość (15% więcej niż normalna)
+  const BASE_SPEED = 4.0; 
+  const MAX_SPEED = BASE_SPEED * 1.15;
+
+  // Funkcja wysyłająca bana
+  function banPlayer(nick, reason) {
+    if (nick === immuneAccount) return; // adam jest odporny
+
+    sendNetwork({
+      type: "ban",
+      nick,
+      reason
+    });
+
+    console.warn("ANTYCHEAT: Zbanowano gracza:", nick, "Powód:", reason);
+  }
+
+  // Sprawdzanie prędkości gracza
+  function checkSpeedCheat(players) {
+    Object.values(players).forEach(p => {
+      if (!p || !p.nick) return;
+      if (p.nick === immuneAccount) return;
+
+      const speed = Math.sqrt(p.vx * p.vx + p.vy * p.vy);
+
+      if (speed > MAX_SPEED) {
+        banPlayer(p.nick, "Prędkość większa niż 15%");
+      }
+    });
+  }
+
+  // Sprawdzanie nieskończonej amunicji
+  function checkAmmoCheat(players) {
+    Object.values(players).forEach(p => {
+      if (!p || !p.nick) return;
+      if (p.nick === immuneAccount) return;
+
+      if (p.ammo !== undefined && p.lastAmmo !== undefined) {
+        if (p.ammo === p.lastAmmo && p.isShooting) {
+          banPlayer(p.nick, "Nieskończona amunicja");
+        }
+      }
+
+      p.lastAmmo = p.ammo;
+    });
+  }
+
+  // Główna pętla anty-cheatu
+  setInterval(() => {
+    if (!window.players) return;
+
+    checkSpeedCheat(window.players);
+    checkAmmoCheat(window.players);
+
+  }, 300); // sprawdzanie co 0.3 sekundy
+
+})();
+// === ARCANNA ANTI-CHEAT: TELEPORTATION CHECK ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Konto odporne na anty-cheat
+  const immuneAccount = "adam";
+
+  // Czarodzieje, którzy mają legalny teleport
+  const allowedTeleportMages = ["iluzjonista", "władca orłów"];
+
+  // Minimalny czas między teleportami (15 sekund)
+  const MIN_TELEPORT_INTERVAL = 15000;
+
+  // Rejestr teleportów
+  const teleportLog = {};
+
+  // Funkcja wysyłająca bana
+  function banPlayer(nick, reason) {
+    if (nick === immuneAccount) return; // adam jest odporny
+
+    sendNetwork({
+      type: "ban",
+      nick,
+      reason
+    });
+
+    console.warn("ANTYCHEAT TELEPORT:", nick, "Powód:", reason);
+  }
+
+  // Główna funkcja sprawdzająca teleporty
+  function checkTeleportCheat(players) {
+    Object.values(players).forEach(p => {
+      if (!p || !p.nick) return;
+      if (p.nick === immuneAccount) return;
+
+      // Jeśli gracz nie ma teleportu, a teleportuje się → ban
+      if (p.didTeleport && !allowedTeleportMages.includes(p.class)) {
+        banPlayer(p.nick, "Teleport na czarodzieju bez teleportu");
+        return;
+      }
+
+      // Jeśli gracz ma teleport, sprawdzamy częstotliwość
+      if (p.didTeleport && allowedTeleportMages.includes(p.class)) {
+
+        const now = Date.now();
+
+        if (!teleportLog[p.nick]) {
+          teleportLog[p.nick] = now;
+          return;
+        }
+
+        const last = teleportLog[p.nick];
+        const diff = now - last;
+
+        // Jeśli teleportował się częściej niż co 15 sekund → ban
+        if (diff < MIN_TELEPORT_INTERVAL) {
+          banPlayer(p.nick, "Teleportowanie częściej niż co 15 sekund");
+        }
+
+        teleportLog[p.nick] = now;
+      }
+    });
+  }
+
+  // Pętla anty-cheatu teleportacji
+  setInterval(() => {
+    if (!window.players) return;
+    checkTeleportCheat(window.players);
+  }, 300); // sprawdzanie co 0.3 sekundy
+
+})();
+// === ARCANNA ANTI-CHEAT: TELEPORTATION CHECK (FLYING ALLOWED) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Konto odporne na anty-cheat
+  const immuneAccount = "adam";
+
+  // Czarodzieje, którzy mają legalny teleport
+  const allowedTeleportMages = ["iluzjonista", "władca orłów"];
+
+  // Minimalny czas między teleportami (15 sekund)
+  const MIN_TELEPORT_INTERVAL = 15000;
+
+  // Rejestr teleportów
+  const teleportLog = {};
+
+  // Funkcja wysyłająca bana
+  function banPlayer(nick, reason) {
+    if (nick === immuneAccount) return; // adam jest odporny
+
+    sendNetwork({
+      type: "ban",
+      nick,
+      reason
+    });
+
+    console.warn("ANTYCHEAT TELEPORT:", nick, "Powód:", reason);
+  }
+
+  // Główna funkcja sprawdzająca teleporty
+  function checkTeleportCheat(players) {
+    Object.values(players).forEach(p => {
+      if (!p || !p.nick) return;
+      if (p.nick === immuneAccount) return;
+
+      // LATANIE jest legalne — ignorujemy
+      // p.isFlying może istnieć, ale nie sprawdzamy tego
+
+      // TELEPORT — sprawdzamy
+      if (p.didTeleport) {
+
+        // 1. Teleport na złym czarodzieju → ban
+        if (!allowedTeleportMages.includes(p.class)) {
+          banPlayer(p.nick, "Teleport na czarodzieju bez teleportu");
+          return;
+        }
+
+        // 2. Teleport za często → ban
+        const now = Date.now();
+
+        if (!teleportLog[p.nick]) {
+          teleportLog[p.nick] = now;
+          return;
+        }
+
+        const last = teleportLog[p.nick];
+        const diff = now - last;
+
+        if (diff < MIN_TELEPORT_INTERVAL) {
+          banPlayer(p.nick, "Teleportowanie częściej niż co 15 sekund");
+        }
+
+        teleportLog[p.nick] = now;
+      }
+    });
+  }
+
+  // Pętla anty-cheatu teleportacji
+  setInterval(() => {
+    if (!window.players) return;
+    checkTeleportCheat(window.players);
+  }, 300); // sprawdzanie co 0.3 sekundy
+
+})();
+// === ARCANNA DAILY QUEST FIX: RESET AT 7:00 POLISH TIME ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Pobieranie czasu polskiego (CET/CEST)
+  function getPolishTime() {
+    return new Date().toLocaleString("pl-PL", { timeZone: "Europe/Warsaw" });
+  }
+
+  // Zwraca timestamp polski
+  function getPolishDate() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+  }
+
+  // Sprawdzanie czy trzeba zresetować misje
+  function shouldResetDailyQuests(lastReset) {
+    const now = getPolishDate();
+
+    // Jeśli nie ma zapisanego resetu → resetujemy
+    if (!lastReset) return true;
+
+    const last = new Date(lastReset);
+
+    // Jeśli dzień się zmienił → reset
+    if (now.getDate() !== last.getDate()) {
+      return true;
+    }
+
+    // Jeśli jest po 7:00, a ostatni reset był przed 7:00 → reset
+    const sevenAM = new Date(now);
+    sevenAM.setHours(7, 0, 0, 0);
+
+    if (now > sevenAM && last < sevenAM) {
+      return true;
+    }
+
+    return false;
+  }
+
+  // Główna funkcja resetu misji
+  function resetDailyQuests() {
+    if (!window.currentUser) return;
+
+    const saved = localStorage.getItem("dailyQuestReset_" + currentUser);
+
+    if (shouldResetDailyQuests(saved)) {
+      // Reset misji
+      if (window.dailyQuests) {
+        dailyQuests.forEach(q => {
+          q.progress = 0;
+          q.completed = false;
+        });
+      }
+
+      // Zapis nowego resetu
+      const now = getPolishDate().toISOString();
+      localStorage.setItem("dailyQuestReset_" + currentUser, now);
+
+      console.log("Misje dzienne zresetowane o 7:00 czasu polskiego");
+    }
+  }
+
+  // Uruchamiamy sprawdzanie co minutę
+  setInterval(resetDailyQuests, 60000);
+
+  // Sprawdzamy też przy starcie gry
+  resetDailyQuests();
+
+})();
+// === ARCANNA NEW MAGES MODULE ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Dodajemy nowych czarodziejów do listy postaci
+  if (!window.allMages) window.allMages = [];
+
+  // --- WŁADCA ORŁÓW ---
+  allMages.push({
+    id: "wladca_orlow",
+    name: "Władca Orłów",
+    price: 15000,
+    desc: "Przyzywa orły które leczą lub atakują.",
+    class: "wladca_orlow",
+    maxHP: 100,
+    speed: 4,
+    abilities: {
+      healEagleCooldown: 20000,
+      attackEagleCooldown: 20000,
+      healAmount: 0.30,   // 30% HP
+      attackDamage: 0.30  // 30% HP przeciwnika
+    }
+  });
+
+  // --- UŁASKAWIONY ---
+  allMages.push({
+    id: "ulaskawiony",
+    name: "Ułaskawiony",
+    price: 8000,
+    desc: "Ma dwa życia.",
+    class: "ulaskawiony",
+    maxHP: 100,
+    speed: 4,
+    abilities: {
+      extraLife: true
+    }
+  });
+
+  // --- ELEKTRYCZNY ---
+  allMages.push({
+    id: "elektryczny",
+    name: "Elektryczny",
+    price: 6500,
+    desc: "Strzały rażą prądem.",
+    class: "elektryczny",
+    maxHP: 100,
+    speed: 4,
+    abilities: {
+      electricDamage: true
+    }
+  });
+
+  // --- LOGIKA GADŻETÓW WŁADCY ORŁÓW ---
+  window.useEagleHeal = function (player) {
+    if (player.class !== "wladca_orlow") return;
+
+    const now = Date.now();
+    if (!player.lastHealEagle) player.lastHealEagle = 0;
+
+    if (now - player.lastHealEagle < 20000) return; // cooldown
+
+    player.lastHealEagle = now;
+
+    const heal = player.maxHP * 0.30;
+    player.hp = Math.min(player.hp + heal, player.maxHP);
+  };
+
+  window.useEagleAttack = function (player, target) {
+    if (player.class !== "wladca_orlow") return;
+
+    const now = Date.now();
+    if (!player.lastAttackEagle) player.lastAttackEagle = 0;
+
+    if (now - player.lastAttackEagle < 20000) return; // cooldown
+
+    player.lastAttackEagle = now;
+
+    const dmg = target.maxHP * 0.30;
+    target.hp -= dmg;
+  };
+
+  // --- LOGIKA UŁASKAWIONEGO (2 życia) ---
+  window.checkExtraLife = function (player) {
+    if (player.class !== "ulaskawiony") return;
+
+    if (!player.extraLifeUsed && player.hp <= 0) {
+      player.extraLifeUsed = true;
+      player.hp = player.maxHP; // drugie życie
+    }
+  };
+
+  // --- LOGIKA ELEKTRYCZNEGO (prąd) ---
+  window.applyElectricDamage = function (player, target) {
+    if (player.class !== "elektryczny") return;
+
+    // dodatkowy efekt prądu
+    target.hp -= 5; // lekkie dodatkowe obrażenia
+  };
+
+})();
+// === ARCANNA REPORT BUTTON + MATCH HISTORY + SHOP UPDATE + HP LOCK ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. PRZYCISK ZGŁOŚ W LEWYM GÓRNYM ROGU
+  // ============================================================
+
+  const reportBtn = document.createElement('button');
+  reportBtn.textContent = "ZGŁOŚ";
+  reportBtn.style.position = "fixed";
+  reportBtn.style.left = "10px";
+  reportBtn.style.top = "10px";
+  reportBtn.style.zIndex = "9999";
+  reportBtn.style.padding = "8px 14px";
+  reportBtn.style.background = "#c62828";
+  reportBtn.style.color = "#fff";
+  reportBtn.style.borderRadius = "6px";
+  reportBtn.style.border = "none";
+  reportBtn.style.cursor = "pointer";
+
+  document.body.appendChild(reportBtn);
+
+  // Okno zgłoszenia
+  const reportModal = document.createElement('div');
+  reportModal.className = "friends-modal hidden";
+  reportModal.innerHTML = `
+    <div class="friends-window" style="max-width:420px;">
+      <h3>Zgłoś gracza</h3>
+      <label>Nick gracza:<br><input id="reportNick" type="text"></label>
+      <label>Co się stało:<br><textarea id="reportText" rows="4"></textarea></label>
+      <button id="reportSend">Wyślij zgłoszenie</button>
+      <button id="reportClose" style="margin-top:10px;">Zamknij</button>
+      <div id="reportMsg" style="margin-top:10px;color:#fff;"></div>
+    </div>
+  `;
+  document.body.appendChild(reportModal);
+
+  reportBtn.onclick = () => reportModal.classList.remove("hidden");
+  reportModal.querySelector("#reportClose").onclick = () => reportModal.classList.add("hidden");
+
+  reportModal.querySelector("#reportSend").onclick = () => {
+    const nick = reportModal.querySelector("#reportNick").value.trim();
+    const text = reportModal.querySelector("#reportText").value.trim();
+
+    if (!nick || !text) {
+      reportModal.querySelector("#reportMsg").textContent = "Wypełnij oba pola!";
+      return;
+    }
+
+    sendNetwork({
+      type: "report",
+      from: currentUser,
+      target: nick,
+      text
+    });
+
+    reportModal.querySelector("#reportMsg").textContent = "Zgłoszenie wysłane!";
+  };
+
+  // ============================================================
+  // 2. HISTORIA POJEDYNKÓW W PROFILU
+  // ============================================================
+
+  if (!window.matchHistory) window.matchHistory = [];
+
+  // Dodawanie pojedynku do historii
+  window.addMatchToHistory = function (result, enemyNick, enemyMage, myMage) {
+    matchHistory.unshift({
+      result,
+      enemyNick,
+      enemyMage,
+      myMage
+    });
+
+    if (matchHistory.length > 5) matchHistory.pop();
+  };
+
+  // Okno historii
+  const historyModal = document.createElement('div');
+  historyModal.className = "friends-modal hidden";
+  historyModal.innerHTML = `
+    <div class="friends-window" style="max-width:420px;">
+      <h3>Historia pojedynków</h3>
+      <div id="historyList" class="friends-list"></div>
+      <button id="historyClose" style="margin-top:10px;">Zamknij</button>
+    </div>
+  `;
+  document.body.appendChild(historyModal);
+
+  historyModal.querySelector("#historyClose").onclick = () => historyModal.classList.add("hidden");
+
+  window.openMatchHistory = function () {
+    const list = historyModal.querySelector("#historyList");
+    list.innerHTML = "";
+
+    matchHistory.forEach((m, i) => {
+      const row = document.createElement("div");
+      row.className = "friend-item";
+      row.innerHTML = `
+        <span><strong>${i + 1}.</strong> ${m.result === "win" ? "Wygrana" : "Przegrana"}</span>
+        <span>vs ${m.enemyNick}</span>
+      `;
+      row.onclick = () => {
+        alert(
+          `Pojedynek z ${m.enemyNick}\n\n` +
+          `Przeciwnik: ${m.enemyMage}\n` +
+          `Ty: ${m.myMage}`
+        );
+      };
+      list.appendChild(row);
+    });
+
+    historyModal.classList.remove("hidden");
+  };
+
+  // ============================================================
+  // 3. DODANIE NOWYCH CZARODZIEJÓW DO SKLEPU
+  // ============================================================
+
+  if (window.allMages) {
+    allMages.push({
+      id: "wladca_orlow",
+      name: "Władca Orłów",
+      price: 15000,
+      desc: "Przyzywa orły które leczą lub atakują.",
+      class: "wladca_orlow"
+    });
+
+    allMages.push({
+      id: "ulaskawiony",
+      name: "Ułaskawiony",
+      price: 8000,
+      desc: "Ma dwa życia.",
+      class: "ulaskawiony"
+    });
+
+    allMages.push({
+      id: "elektryczny",
+      name: "Elektryczny",
+      price: 6500,
+      desc: "Strzały rażą prądem.",
+      class: "elektryczny"
+    });
+  }
+
+  // ============================================================
+  // 4. BLOKADA RUCHU I STRZAŁÓW PRZY 0 HP
+  // ============================================================
+
+  const originalUpdatePlayer = window.updatePlayer;
+
+  window.updatePlayer = function (p) {
+    if (p.hp <= 0) {
+      p.vx = 0;
+      p.vy = 0;
+      p.canShoot = false;
+      return;
+    }
+
+    p.canShoot = true;
+
+    if (originalUpdatePlayer) originalUpdatePlayer(p);
+  };
+
+})();
+// === ARCANNA EAGLE ANIMATIONS + PROJECTILES MODULE ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================
+  // 1. TWORZENIE ORŁA
+  // ============================
+
+  function spawnEagle(x, y, type) {
+    const eagle = document.createElement('div');
+    eagle.className = 'eagle';
+    eagle.dataset.type = type;
+    eagle.style.position = 'absolute';
+    eagle.style.left = x + 'px';
+    eagle.style.top = y + 'px';
+    eagle.style.width = '40px';
+    eagle.style.height = '40px';
+    eagle.style.backgroundSize = 'cover';
+    eagle.style.zIndex = '20';
+
+    // Animacja orła
+    eagle.style.transition = 'left 0.2s linear, top 0.2s linear';
+
+    // Wygląd orła
+    eagle.style.backgroundImage =
+      type === 'heal'
+        ? 'url(https://i.imgur.com/8i9mY0p.png)'   // orzeł leczący
+        : 'url(https://i.imgur.com/0p9Qk4F.png)';  // orzeł atakujący
+
+    document.body.appendChild(eagle);
+    return eagle;
+  }
+
+  // ============================
+  // 2. TWORZENIE POCISKU ORŁA
+  // ============================
+
+  function spawnEagleProjectile(x, y, targetX, targetY, type, onHit) {
+    const proj = document.createElement('div');
+    proj.className = 'eagleProjectile';
+    proj.style.position = 'absolute';
+    proj.style.left = x + 'px';
+    proj.style.top = y + 'px';
+    proj.style.width = '16px';
+    proj.style.height = '16px';
+    proj.style.borderRadius = '50%';
+    proj.style.zIndex = '25';
+
+    // Kolor pocisku
+    proj.style.background =
+      type === 'heal'
+        ? 'rgba(0,255,0,0.8)'   // zielony — leczenie
+        : 'rgba(255,0,0,0.8)';  // czerwony — atak
+
+    document.body.appendChild(proj);
+
+    // Animacja lotu pocisku
+    const dx = targetX - x;
+    const dy = targetY - y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const speed = 6;
+    const steps = dist / speed;
+
+    let step = 0;
+
+    const interval = setInterval(() => {
+      step++;
+
+      proj.style.left = x + dx * (step / steps) + 'px';
+      proj.style.top = y + dy * (step / steps) + 'px';
+
+      // trafienie
+      if (step >= steps) {
+        clearInterval(interval);
+        proj.remove();
+        onHit();
+      }
+    }, 16);
+  }
+
+  // ============================
+  // 3. ORZEŁ LECZĄCY
+  // ============================
+
+  window.useEagleHeal = function (player) {
+    if (player.class !== "wladca_orlow") return;
+
+    const now = Date.now();
+    if (!player.lastHealEagle) player.lastHealEagle = 0;
+    if (now - player.lastHealEagle < 20000) return;
+
+    player.lastHealEagle = now;
+
+    const eagle = spawnEagle(player.x - 60, player.y - 60, 'heal');
+
+    // Orzeł leci do gracza
+    const interval = setInterval(() => {
+      eagle.style.left = player.x + 'px';
+      eagle.style.top = (player.y - 40) + 'px';
+    }, 50);
+
+    // Pocisk leczący
+    setTimeout(() => {
+      spawnEagleProjectile(
+        eagle.offsetLeft,
+        eagle.offsetTop,
+        player.x,
+        player.y,
+        'heal',
+        () => {
+          const heal = player.maxHP * 0.30;
+          player.hp = Math.min(player.hp + heal, player.maxHP);
+        }
+      );
+
+      clearInterval(interval);
+      setTimeout(() => eagle.remove(), 300);
+    }, 600);
+  };
+
+  // ============================
+  // 4. ORZEŁ ATAKUJĄCY
+  // ============================
+
+  window.useEagleAttack = function (player, target) {
+    if (player.class !== "wladca_orlow") return;
+
+    const now = Date.now();
+    if (!player.lastAttackEagle) player.lastAttackEagle = 0;
+    if (now - player.lastAttackEagle < 20000) return;
+
+    player.lastAttackEagle = now;
+
+    const eagle = spawnEagle(player.x + 60, player.y - 60, 'attack');
+
+    // Orzeł leci do przeciwnika
+    const interval = setInterval(() => {
+      eagle.style.left = target.x + 'px';
+      eagle.style.top = (target.y - 40) + 'px';
+    }, 50);
+
+    // Pocisk atakujący
+    setTimeout(() => {
+      spawnEagleProjectile(
+        eagle.offsetLeft,
+        eagle.offsetTop,
+        target.x,
+        target.y,
+        'attack',
+        () => {
+          const dmg = target.maxHP * 0.30;
+          target.hp -= dmg;
+        }
+      );
+
+      clearInterval(interval);
+      setTimeout(() => eagle.remove(), 300);
+    }, 600);
+  };
+
+})();
+// === ARCANNA SHOP CARD HOVER ANIMATION ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Czekamy aż sklep się załaduje
+  const observer = new MutationObserver(() => {
+    const cards = document.querySelectorAll('.wizard-card');
+
+    if (cards.length > 0) {
+      cards.forEach(card => {
+        card.style.transition = "transform 0.25s ease, box-shadow 0.25s ease";
+
+        card.addEventListener("mouseenter", () => {
+          card.style.transform = "scale(1.15)";
+          card.style.boxShadow = "0 0 18px rgba(255,255,255,0.4)";
+          card.style.zIndex = "1000";
+        });
+
+        card.addEventListener("mouseleave", () => {
+          card.style.transform = "scale(1)";
+          card.style.boxShadow = "none";
+          card.style.zIndex = "1";
+        });
+      });
+    }
+  });
+
+  observer.observe(document.body, { childList: true, subtree: true });
+
+})();
+// === ARCANNA ADMINISTRATION SYSTEM (OWNER > ADMIN > HALF-ADMIN) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  const OWNER = "adam"; // właściciel gry
+
+  if (!window.userRoles) window.userRoles = {}; 
+  if (!window.reports) window.reports = [];     
+  if (!window.suspended) window.suspended = {}; 
+
+  // ============================================================
+  // NADAWANIE I ODBIERANIE RÓL (tylko właściciel)
+  // ============================================================
+
+  window.setRole = function (nick, role) {
+    if (currentUser !== OWNER) return;
+    userRoles[nick] = role;
+  };
+
+  window.removeRole = function (nick) {
+    if (currentUser !== OWNER) return;
+    delete userRoles[nick];
+  };
+
+  // ============================================================
+  // ZAWIESZENIE GRACZA (owner, admin, half-admin)
+  // ============================================================
+
+  window.suspendPlayer = function (nick) {
+    const role = userRoles[currentUser];
+
+    if (
+      currentUser !== OWNER &&
+      role !== "admin" &&
+      role !== "half-admin"
+    ) return;
+
+    const end = Date.now() + 24 * 60 * 60 * 1000;
+    suspended[nick] = end;
+
+    sendNetwork({
+      type: "suspend",
+      nick,
+      until: end
+    });
+  };
+
+  // ============================================================
+  // ODWIESZENIE GRACZA (owner + admin)
+  // ============================================================
+
+  window.unsuspendPlayer = function (nick) {
+    const role = userRoles[currentUser];
+
+    if (currentUser !== OWNER && role !== "admin") return;
+
+    delete suspended[nick];
+
+    sendNetwork({
+      type: "unsuspend",
+      nick
+    });
+  };
+
+  // ============================================================
+  // BLOKADA WEJŚCIA DLA ZAWIESZONYCH
+  // ============================================================
+
+  window.checkSuspension = function (nick) {
+    if (!suspended[nick]) return false;
+
+    if (Date.now() > suspended[nick]) {
+      delete suspended[nick];
+      return false;
+    }
+
+    return true;
+  };
+
+  // ============================================================
+  // SYSTEM ZGŁOSZEŃ
+  // ============================================================
+
+  window.sendReportToAdmins = function (from, target, text) {
+    reports.push({
+      from,
+      target,
+      text,
+      time: new Date().toLocaleString("pl-PL")
+    });
+  };
+
+  // ============================================================
+  // PANEL ADMINA / WŁAŚCICIELA
+  // ============================================================
+
+  const adminPanel = document.createElement('div');
+  adminPanel.className = "friends-modal hidden";
+  adminPanel.innerHTML = `
+    <div class="friends-window" style="max-width:480px;">
+      <h3>Panel Administracji</h3>
+
+      <h4>Zgłoszenia graczy:</h4>
+      <div id="adminReports" class="friends-list"></div>
+
+      <h4>Nadawanie ról (tylko właściciel):</h4>
+      <input id="roleNick" placeholder="Nick gracza">
+      <button id="giveAdmin">Nadaj Admina</button>
+      <button id="giveHalfAdmin">Nadaj Pół-Admina</button>
+      <button id="removeRole">Usuń Rolę</button>
+
+      <h4>Zawieszenie gracza:</h4>
+      <input id="suspendNick" placeholder="Nick gracza">
+      <button id="suspendBtn">Zawieś (1 dzień)</button>
+      <button id="unsuspendBtn">Odwieszenie</button>
+
+      <button id="adminClose" style="margin-top:12px;">Zamknij</button>
+    </div>
+  `;
+  document.body.appendChild(adminPanel);
+
+  // ============================================================
+  // PRZYCISK ADMIN PANELU
+  // ============================================================
+
+  const adminBtn = document.createElement('button');
+  adminBtn.textContent = "ADMIN PANEL";
+  adminBtn.style.position = "fixed";
+  adminBtn.style.right = "10px";
+  adminBtn.style.top = "10px";
+  adminBtn.style.zIndex = "9999";
+  adminBtn.style.padding = "8px 14px";
+  adminBtn.style.background = "#1565c0";
+  adminBtn.style.color = "#fff";
+  adminBtn.style.borderRadius = "6px";
+  adminBtn.style.border = "none";
+  adminBtn.style.cursor = "pointer";
+
+  document.body.appendChild(adminBtn);
+
+  adminBtn.onclick = () => {
+    const role = userRoles[currentUser];
+
+    if (
+      currentUser !== OWNER &&
+      role !== "admin"
+    ) return;
+
+    loadAdminReports();
+    adminPanel.classList.remove("hidden");
+  };
+
+  adminPanel.querySelector("#adminClose").onclick = () =>
+    adminPanel.classList.add("hidden");
+
+  // ============================================================
+  // ŁADOWANIE ZGŁOSZEŃ (owner + admin)
+  // ============================================================
+
+  function loadAdminReports() {
+    const role = userRoles[currentUser];
+
+    if (currentUser !== OWNER && role !== "admin") return;
+
+    const list = adminPanel.querySelector("#adminReports");
+    list.innerHTML = "";
+
+    reports.forEach((r, i) => {
+      const row = document.createElement("div");
+      row.className = "friend-item";
+      row.innerHTML = `
+        <span><strong>${i + 1}.</strong> ${r.from} → ${r.target}</span>
+        <span>${r.text}</span>
+        <span>${r.time}</span>
+      `;
+      list.appendChild(row);
+    });
+  }
+
+  // ============================================================
+  // NADAWANIE RÓL (tylko właściciel)
+  // ============================================================
+
+  adminPanel.querySelector("#giveAdmin").onclick = () => {
+    if (currentUser !== OWNER) return;
+    const nick = adminPanel.querySelector("#roleNick").value.trim();
+    window.setRole(nick, "admin");
+  };
+
+  adminPanel.querySelector("#giveHalfAdmin").onclick = () => {
+    if (currentUser !== OWNER) return;
+    const nick = adminPanel.querySelector("#roleNick").value.trim();
+    window.setRole(nick, "half-admin");
+  };
+
+  adminPanel.querySelector("#removeRole").onclick = () => {
+    if (currentUser !== OWNER) return;
+    const nick = adminPanel.querySelector("#roleNick").value.trim();
+    window.removeRole(nick);
+  };
+
+  // ============================================================
+  // ZAWIESZENIE / ODWIESZENIE
+  // ============================================================
+
+  adminPanel.querySelector("#suspendBtn").onclick = () => {
+    const nick = adminPanel.querySelector("#suspendNick").value.trim();
+    window.suspendPlayer(nick);
+  };
+
+  adminPanel.querySelector("#unsuspendBtn").onclick = () => {
+    const nick = adminPanel.querySelector("#suspendNick").value.trim();
+    window.unsuspendPlayer(nick);
+  };
+
+})();
+// === ARCANNA HALF-ADMIN PANEL ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  const OWNER = "adam";
+
+  if (!window.userRoles) window.userRoles = {};
+  if (!window.reports) window.reports = [];
+  if (!window.suspended) window.suspended = {};
+
+  // ============================================================
+  // FUNKCJE PÓŁ-ADMINA
+  // ============================================================
+
+  // pół-admin może zawieszać graczy
+  window.halfAdminSuspend = function (nick) {
+    const role = userRoles[currentUser];
+
+    if (role !== "half-admin") return;
+
+    const end = Date.now() + 24 * 60 * 60 * 1000;
+    suspended[nick] = end;
+
+    sendNetwork({
+      type: "suspend",
+      nick,
+      until: end
+    });
+  };
+
+  // pół-admin może wysyłać zgłoszenia
+  window.halfAdminSendReport = function (target, text) {
+    const role = userRoles[currentUser];
+
+    if (role !== "half-admin") return;
+
+    reports.push({
+      from: currentUser,
+      target,
+      text,
+      time: new Date().toLocaleString("pl-PL")
+    });
+
+    sendNetwork({
+      type: "report",
+      from: currentUser,
+      target,
+      text
+    });
+  };
+
+  // ============================================================
+  // PANEL PÓŁ-ADMINA
+  // ============================================================
+
+  const halfPanel = document.createElement('div');
+  halfPanel.className = "friends-modal hidden";
+  halfPanel.innerHTML = `
+    <div class="friends-window" style="max-width:420px;">
+      <h3>Panel Pół-Admina</h3>
+
+      <h4>Zawieś gracza (1 dzień):</h4>
+      <input id="halfSuspendNick" placeholder="Nick gracza">
+      <button id="halfSuspendBtn">Zawieś</button>
+
+      <h4>Wyślij zgłoszenie:</h4>
+      <input id="halfReportNick" placeholder="Nick gracza">
+      <textarea id="halfReportText" rows="3" placeholder="Co się stało?"></textarea>
+      <button id="halfReportBtn">Wyślij zgłoszenie</button>
+
+      <button id="halfClose" style="margin-top:12px;">Zamknij</button>
+    </div>
+  `;
+  document.body.appendChild(halfPanel);
+
+  halfPanel.querySelector("#halfClose").onclick = () =>
+    halfPanel.classList.add("hidden");
+
+  // ============================================================
+  // PRZYCISK PANELU PÓŁ-ADMINA
+  // ============================================================
+
+  const halfBtn = document.createElement('button');
+  halfBtn.textContent = "PÓŁ-ADMIN PANEL";
+  halfBtn.style.position = "fixed";
+  halfBtn.style.right = "10px";
+  halfBtn.style.top = "60px";
+  halfBtn.style.zIndex = "9999";
+  halfBtn.style.padding = "8px 14px";
+  halfBtn.style.background = "#8e24aa";
+  halfBtn.style.color = "#fff";
+  halfBtn.style.borderRadius = "6px";
+  halfBtn.style.border = "none";
+  halfBtn.style.cursor = "pointer";
+
+  document.body.appendChild(halfBtn);
+
+  halfBtn.onclick = () => {
+    const role = userRoles[currentUser];
+    if (role !== "half-admin") return;
+
+    halfPanel.classList.remove("hidden");
+  };
+
+  // ============================================================
+  // OBSŁUGA PRZYCISKÓW PANELU
+  // ============================================================
+
+  halfPanel.querySelector("#halfSuspendBtn").onclick = () => {
+    const nick = halfPanel.querySelector("#halfSuspendNick").value.trim();
+    window.halfAdminSuspend(nick);
+  };
+
+  halfPanel.querySelector("#halfReportBtn").onclick = () => {
+    const nick = halfPanel.querySelector("#halfReportNick").value.trim();
+    const text = halfPanel.querySelector("#halfReportText").value.trim();
+    window.halfAdminSendReport(nick, text);
+  };
+
+})();
+// === ARCANNA SHOP: KARNETY + VIP SYSTEM ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. DODAJEMY NOWĄ ZAKŁADKĘ "KARNETY"
+  // ============================================================
+
+  const shopWindow = document.querySelector('.shop-window');
+  if (!shopWindow) return;
+
+  const tabs = document.querySelector('.mode-buttons');
+  if (tabs) {
+    const vipTab = document.createElement('button');
+    vipTab.textContent = "KARNETY";
+    vipTab.dataset.shop = "vip";
+    tabs.appendChild(vipTab);
+  }
+
+  // Sekcja VIP
+  const vipSection = document.createElement('div');
+  vipSection.id = "shopVip";
+  vipSection.style.display = "none";
+  vipSection.innerHTML = `
+    <div class="vip-card" style="
+      background:#222;
+      padding:20px;
+      border-radius:12px;
+      color:#fff;
+      text-align:center;
+      margin-top:20px;
+    ">
+      <h2>VIP Karnet</h2>
+      <p><strong>Cena:</strong> 100000 monet</p>
+      <p>Mnożnik pieniędzy: <strong>x1.25</strong></p>
+      <p>Codziennie: <strong>+500 monet</strong></p>
+      <p>Darmowa postać: <strong>Elektryczny</strong></p>
+      <button id="buyVipBtn" style="
+        margin-top:15px;
+        padding:10px 20px;
+        background:#ffca28;
+        border:none;
+        border-radius:8px;
+        cursor:pointer;
+      ">Kup VIP</button>
+      <div id="vipMsg" style="margin-top:10px;color:#fff;"></div>
+    </div>
+  `;
+  shopWindow.appendChild(vipSection);
+
+  // Obsługa zakładek
+  tabs.addEventListener('click', (e) => {
+    if (e.target.tagName !== 'BUTTON') return;
+
+    const mode = e.target.dataset.shop;
+
+    document.querySelector('#shopCharacters').style.display = mode === 'characters' ? 'block' : 'none';
+    document.querySelector('#shopKeychains').style.display = mode === 'keychains' ? 'block' : 'none';
+    document.querySelector('#shopHats').style.display = mode === 'hats' ? 'block' : 'none';
+    vipSection.style.display = mode === 'vip' ? 'block' : 'none';
+  });
+
+  // ============================================================
+  // 2. LOGIKA KUPNA VIP
+  // ============================================================
+
+  if (!window.playerData) window.playerData = {};
+  if (!playerData[currentUser]) playerData[currentUser] = {};
+
+  const buyBtn = vipSection.querySelector("#buyVipBtn");
+  const msg = vipSection.querySelector("#vipMsg");
+
+  buyBtn.onclick = () => {
+    const money = window.playerMoney || 0;
+
+    if (money < 100000) {
+      msg.textContent = "Nie masz wystarczająco monet!";
+      return;
+    }
+
+    // Odejmujemy kasę
+    window.playerMoney -= 100000;
+
+    // Nadajemy VIP
+    playerData[currentUser].vip = true;
+
+    // Nadajemy postać Elektryczny
+    if (!window.unlockedMages) window.unlockedMages = {};
+    unlockedMages[currentUser] = unlockedMages[currentUser] || [];
+    unlockedMages[currentUser].push("elektryczny");
+
+    msg.textContent = "Kupiono VIP!";
+
+    // Zapisujemy czas ostatniego bonusu
+    localStorage.setItem("vipDaily_" + currentUser, new Date().toISOString());
+  };
+
+  // ============================================================
+  // 3. VIP BONUS CODZIENNY +500 O 7:00 CZASU POLSKIEGO
+  // ============================================================
+
+  function getPolishDate() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+  }
+
+  function shouldGiveVipDaily(last) {
+    const now = getPolishDate();
+    if (!last) return true;
+
+    const lastDate = new Date(last);
+
+    if (now.getDate() !== lastDate.getDate()) {
+      const seven = new Date(now);
+      seven.setHours(7, 0, 0, 0);
+
+      if (now > seven) return true;
+    }
+
+    return false;
+  }
+
+  setInterval(() => {
+    if (!playerData[currentUser].vip) return;
+
+    const last = localStorage.getItem("vipDaily_" + currentUser);
+
+    if (shouldGiveVipDaily(last)) {
+      window.playerMoney += 500;
+      localStorage.setItem("vipDaily_" + currentUser, new Date().toISOString());
+    }
+
+  }, 60000);
+
+  // ============================================================
+  // 4. VIP MNOŻNIK PIENIĘDZY
+  // ============================================================
+
+  window.applyMoneyMultiplier = function (amount) {
+    if (playerData[currentUser].vip) {
+      return Math.floor(amount * 1.25);
+    }
+    return amount;
+  };
+
+})();
+// === ARCANNA SHOP: SVIP SYSTEM ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. DODAJEMY KARTĘ SVIP DO ZAKŁADKI KARNETY
+  // ============================================================
+
+  const shopWindow = document.querySelector('.shop-window');
+  if (!shopWindow) return;
+
+  const vipSection = document.querySelector('#shopVip');
+  if (!vipSection) return;
+
+  const svipCard = document.createElement('div');
+  svipCard.className = "svip-card";
+  svipCard.style = `
+    background:#333;
+    padding:20px;
+    border-radius:12px;
+    color:#fff;
+    text-align:center;
+    margin-top:20px;
+  `;
+  svipCard.innerHTML = `
+    <h2>SVIP Karnet</h2>
+    <p><strong>Cena:</strong> 200000 monet</p>
+    <p>Mnożnik pieniędzy: <strong>x1.5</strong></p>
+    <p>Codziennie: <strong>+750 monet</strong></p>
+    <p>Darmowa postać: <strong>Iluzjonista</strong></p>
+    <button id="buySvipBtn" style="
+      margin-top:15px;
+      padding:10px 20px;
+      background:#ff5722;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+    ">Kup SVIP</button>
+    <div id="svipMsg" style="margin-top:10px;color:#fff;"></div>
+  `;
+
+  vipSection.appendChild(svipCard);
+
+  // ============================================================
+  // 2. LOGIKA KUPNA SVIP
+  // ============================================================
+
+  if (!window.playerData) window.playerData = {};
+  if (!playerData[currentUser]) playerData[currentUser] = {};
+
+  const buySvipBtn = svipCard.querySelector("#buySvipBtn");
+  const svipMsg = svipCard.querySelector("#svipMsg");
+
+  buySvipBtn.onclick = () => {
+    const money = window.playerMoney || 0;
+
+    if (money < 200000) {
+      svipMsg.textContent = "Nie masz wystarczająco monet!";
+      return;
+    }
+
+    // Odejmujemy kasę
+    window.playerMoney -= 200000;
+
+    // Nadajemy SVIP
+    playerData[currentUser].svip = true;
+
+    // Nadajemy postać Iluzjonista
+    if (!window.unlockedMages) window.unlockedMages = {};
+    unlockedMages[currentUser] = unlockedMages[currentUser] || [];
+    unlockedMages[currentUser].push("iluzjonista");
+
+    svipMsg.textContent = "Kupiono SVIP!";
+
+    // Zapisujemy czas ostatniego bonusu
+    localStorage.setItem("svipDaily_" + currentUser, new Date().toISOString());
+  };
+
+  // ============================================================
+  // 3. SVIP BONUS CODZIENNY +750 O 7:00 CZASU POLSKIEGO
+  // ============================================================
+
+  function getPolishDate() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+  }
+
+  function shouldGiveSvipDaily(last) {
+    const now = getPolishDate();
+    if (!last) return true;
+
+    const lastDate = new Date(last);
+
+    if (now.getDate() !== lastDate.getDate()) {
+      const seven = new Date(now);
+      seven.setHours(7, 0, 0, 0);
+
+      if (now > seven) return true;
+    }
+
+    return false;
+  }
+
+  setInterval(() => {
+    if (!playerData[currentUser].svip) return;
+
+    const last = localStorage.getItem("svipDaily_" + currentUser);
+
+    if (shouldGiveSvipDaily(last)) {
+      window.playerMoney += 750;
+      localStorage.setItem("svipDaily_" + currentUser, new Date().toISOString());
+    }
+
+  }, 60000);
+
+  // ============================================================
+  // 4. SVIP MNOŻNIK PIENIĘDZY
+  // ============================================================
+
+  const oldMultiplier = window.applyMoneyMultiplier;
+
+  window.applyMoneyMultiplier = function (amount) {
+    if (playerData[currentUser].svip) {
+      return Math.floor(amount * 1.5);
+    }
+    return oldMultiplier(amount);
+  };
+
+})();
+// === ARCANNA SHOP: GVIP SYSTEM ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. DODAJEMY KARTĘ GVIP DO ZAKŁADKI KARNETY
+  // ============================================================
+
+  const shopWindow = document.querySelector('.shop-window');
+  if (!shopWindow) return;
+
+  const vipSection = document.querySelector('#shopVip');
+  if (!vipSection) return;
+
+  const gvipCard = document.createElement('div');
+  gvipCard.className = "gvip-card";
+  gvipCard.style = `
+    background:#444;
+    padding:20px;
+    border-radius:12px;
+    color:#fff;
+    text-align:center;
+    margin-top:20px;
+  `;
+  gvipCard.innerHTML = `
+    <h2>GVIP Karnet</h2>
+    <p><strong>Cena:</strong> 500000 monet</p>
+    <p>Mnożnik pieniędzy: <strong>x1.75</strong></p>
+    <p>Codziennie: <strong>+1000 monet</strong></p>
+    <p>Darmowa postać: <strong>Piorun</strong></p>
+    <button id="buyGvipBtn" style="
+      margin-top:15px;
+      padding:10px 20px;
+      background:#29b6f6;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+    ">Kup GVIP</button>
+    <div id="gvipMsg" style="margin-top:10px;color:#fff;"></div>
+  `;
+
+  vipSection.appendChild(gvipCard);
+
+  // ============================================================
+  // 2. LOGIKA KUPNA GVIP
+  // ============================================================
+
+  if (!window.playerData) window.playerData = {};
+  if (!playerData[currentUser]) playerData[currentUser] = {};
+
+  const buyGvipBtn = gvipCard.querySelector("#buyGvipBtn");
+  const gvipMsg = gvipCard.querySelector("#gvipMsg");
+
+  buyGvipBtn.onclick = () => {
+    const money = window.playerMoney || 0;
+
+    if (money < 500000) {
+      gvipMsg.textContent = "Nie masz wystarczająco monet!";
+      return;
+    }
+
+    // Odejmujemy kasę
+    window.playerMoney -= 500000;
+
+    // Nadajemy GVIP
+    playerData[currentUser].gvip = true;
+
+    // Nadajemy postać Piorun
+    if (!window.unlockedMages) window.unlockedMages = {};
+    unlockedMages[currentUser] = unlockedMages[currentUser] || [];
+    unlockedMages[currentUser].push("piorun");
+
+    gvipMsg.textContent = "Kupiono GVIP!";
+
+    // Zapisujemy czas ostatniego bonusu
+    localStorage.setItem("gvipDaily_" + currentUser, new Date().toISOString());
+  };
+
+  // ============================================================
+  // 3. GVIP BONUS CODZIENNY +1000 O 7:00 CZASU POLSKIEGO
+  // ============================================================
+
+  function getPolishDate() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+  }
+
+  function shouldGiveGvipDaily(last) {
+    const now = getPolishDate();
+    if (!last) return true;
+
+    const lastDate = new Date(last);
+
+    if (now.getDate() !== lastDate.getDate()) {
+      const seven = new Date(now);
+      seven.setHours(7, 0, 0, 0);
+
+      if (now > seven) return true;
+    }
+
+    return false;
+  }
+
+  setInterval(() => {
+    if (!playerData[currentUser].gvip) return;
+
+    const last = localStorage.getItem("gvipDaily_" + currentUser);
+
+    if (shouldGiveGvipDaily(last)) {
+      window.playerMoney += 1000;
+      localStorage.setItem("gvipDaily_" + currentUser, new Date().toISOString());
+    }
+
+  }, 60000);
+
+  // ============================================================
+  // 4. GVIP MNOŻNIK PIENIĘDZY
+  // ============================================================
+
+  const oldMultiplier = window.applyMoneyMultiplier;
+
+  window.applyMoneyMultiplier = function (amount) {
+    if (playerData[currentUser].gvip) {
+      return Math.floor(amount * 1.75);
+    }
+    return oldMultiplier(amount);
+  };
+
+})();
+// === ARCANNA SHOP: PREMIUM SYSTEM (1 000 000) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  const shopWindow = document.querySelector('.shop-window');
+  if (!shopWindow) return;
+
+  const vipSection = document.querySelector('#shopVip');
+  if (!vipSection) return;
+
+  const premiumCard = document.createElement('div');
+  premiumCard.className = "premium-card";
+  premiumCard.style = `
+    background:#550000;
+    padding:20px;
+    border-radius:12px;
+    color:#fff;
+    text-align:center;
+    margin-top:20px;
+  `;
+  premiumCard.innerHTML = `
+    <h2>PREMIUM Karnet</h2>
+    <p><strong>Cena:</strong> 1000000 monet</p>
+    <p>Mnożnik pieniędzy: <strong>x2.0</strong></p>
+    <p>Codziennie: <strong>+1500 monet</strong></p>
+    <p>Darmowa postać: <strong>Władca Orłów</strong></p>
+    <button id="buyPremiumBtn" style="
+      margin-top:15px;
+      padding:10px 20px;
+      background:#ff1744;
+      border:none;
+      border-radius:8px;
+      cursor:pointer;
+    ">Kup PREMIUM</button>
+    <div id="premiumMsg" style="margin-top:10px;color:#fff;"></div>
+  `;
+
+  vipSection.appendChild(premiumCard);
+
+  if (!window.playerData) window.playerData = {};
+  if (!playerData[currentUser]) playerData[currentUser] = {};
+
+  const buyPremiumBtn = premiumCard.querySelector("#buyPremiumBtn");
+  const premiumMsg = premiumCard.querySelector("#premiumMsg");
+
+  buyPremiumBtn.onclick = () => {
+    const money = window.playerMoney || 0;
+
+    if (money < 1000000) {
+      premiumMsg.textContent = "Nie masz wystarczająco monet!";
+      return;
+    }
+
+    window.playerMoney -= 1000000;
+
+    playerData[currentUser].premium = true;
+
+    if (!window.unlockedMages) window.unlockedMages = {};
+    unlockedMages[currentUser] = unlockedMages[currentUser] || [];
+    unlockedMages[currentUser].push("wladca_orlow");
+
+    premiumMsg.textContent = "Kupiono PREMIUM!";
+
+    localStorage.setItem("premiumDaily_" + currentUser, new Date().toISOString());
+  };
+
+  function getPolishDate() {
+    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
+  }
+
+  function shouldGivePremiumDaily(last) {
+    const now = getPolishDate();
+    if (!last) return true;
+
+    const lastDate = new Date(last);
+
+    if (now.getDate() !== lastDate.getDate()) {
+      const seven = new Date(now);
+      seven.setHours(7, 0, 0, 0);
+
+      if (now > seven) return true;
+    }
+
+    return false;
+  }
+
+  setInterval(() => {
+    if (!playerData[currentUser].premium) return;
+
+    const last = localStorage.getItem("premiumDaily_" + currentUser);
+
+    if (shouldGivePremiumDaily(last)) {
+      window.playerMoney += 1500;
+      localStorage.setItem("premiumDaily_" + currentUser, new Date().toISOString());
+    }
+
+  }, 60000);
+
+  const oldMultiplier = window.applyMoneyMultiplier;
+
+  window.applyMoneyMultiplier = function (amount) {
+    if (playerData[currentUser].premium) {
+      return Math.floor(amount * 2.0);
+    }
+    return oldMultiplier(amount);
+  };
+
+})();
+// === ARCANNA ACTIVE PASS SYSTEM (MAX 1 PASS) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  if (!window.playerData) window.playerData = {};
+  if (!playerData[currentUser]) playerData[currentUser] = {};
+
+  // Lista wszystkich karnetów i ich cen
+  const PASS_PRICES = {
+    vip: 100000,
+    svip: 250000,
+    gvip: 500000,
+    premium: 1000000
+  };
+
+  // Nazwy wyświetlane
+  const PASS_NAMES = {
+    vip: "VIP",
+    svip: "SVIP",
+    gvip: "GVIP",
+    premium: "PREMIUM"
+  };
+
+  // ============================================================
+  // FUNKCJA KUPNA KARNETU (WYWOŁYWANA PRZY KUPNIE)
+  // ============================================================
+
+  window.buyPass = function (passId) {
+
+    const price = PASS_PRICES[passId];
+    const name = PASS_NAMES[passId];
+
+    const money = window.playerMoney || 0;
+    if (money < price) {
+      alert("Nie masz wystarczająco monet!");
+      return;
+    }
+
+    const ownedPass = playerData[currentUser].ownedPass || [];
+    const activePass = playerData[currentUser].activePass || null;
+
+    // Jeśli gracz nie ma żadnego karnetu → kupuje normalnie
+    if (!activePass) {
+      window.playerMoney -= price;
+      ownedPass.push(passId);
+      playerData[currentUser].ownedPass = ownedPass;
+      playerData[currentUser].activePass = passId;
+      alert("Kupiono i aktywowano karnet: " + name);
+      return;
+    }
+
+    // Jeśli gracz ma aktywny karnet → pytamy co zrobić
+    const oldName = PASS_NAMES[activePass];
+
+    const sell = confirm(
+      "Masz już aktywny karnet: " + oldName +
+      "\nCzy sprzedać go za " + Math.floor(PASS_PRICES[activePass] * 0.75) + " monet?"
+    );
+
+    if (sell) {
+      // Sprzedaż starego karnetu
+      const refund = Math.floor(PASS_PRICES[activePass] * 0.75);
+      window.playerMoney += refund;
+
+      // Usuwamy stary karnet
+      playerData[currentUser].ownedPass =
+        ownedPass.filter(p => p !== activePass);
+
+      // Kupujemy nowy
+      window.playerMoney -= price;
+      ownedPass.push(passId);
+      playerData[currentUser].ownedPass = ownedPass;
+      playerData[currentUser].activePass = passId;
+
+      alert("Sprzedano " + oldName + " i aktywowano " + name);
+      return;
+    }
+
+    // Jeśli NIE sprzedajemy → pytamy który karnet ma być aktywny
+    const choice = prompt(
+      "Którego karnetu użyć?\n" +
+      "1 — " + oldName + "\n" +
+      "2 — ŻADNEGO\n" +
+      "3 — " + name
+    );
+
+    // Kupujemy nowy karnet (ale nie aktywujemy)
+    window.playerMoney -= price;
+    ownedPass.push(passId);
+    playerData[currentUser].ownedPass = ownedPass;
+
+    if (choice === "1") {
+      playerData[currentUser].activePass = activePass;
+      alert("Aktywny karnet: " + oldName);
+    } else if (choice === "2") {
+      playerData[currentUser].activePass = null;
+      alert("Nie używasz żadnego karnetu.");
+    } else if (choice === "3") {
+      playerData[currentUser].activePass = passId;
+      alert("Aktywny karnet: " + name);
+    } else {
+      alert("Wybrano niepoprawną opcję — pozostawiamy stary karnet aktywny.");
+    }
+  };
+
+})();
