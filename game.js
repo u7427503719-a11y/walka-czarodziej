@@ -3439,3 +3439,180 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   if (halfPanel && currentUser === "adam") halfPanel.remove();
 
 })();
+// === ARCANNA FIX: PANELS ONLY AFTER LOGIN + REMOVE OLD REPORT BUTTON ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. USUWANIE STAREGO PRZYCISKU "ZGŁOŚ"
+  // ============================================================
+
+  const oldReport = document.querySelector("#reportBtn");
+  if (oldReport) oldReport.remove();
+
+  const oldReport2 = document.querySelector(".report-btn");
+  if (oldReport2) oldReport2.remove();
+
+  const oldReport3 = document.querySelector("#zgloś");
+  if (oldReport3) oldReport3.remove();
+
+
+  // ============================================================
+  // 2. UKRYWANIE PANELI PRZED LOGOWANIEM
+  // ============================================================
+
+  // Funkcja wywoływana po zalogowaniu
+  window.showRolePanels = function () {
+
+    if (!currentUser || currentUser.trim() === "") {
+      return; // niezalogowany → nic nie pokazujemy
+    }
+
+    const role = userRoles[currentUser];
+
+    // Właściciel → tylko panel właściciela
+    if (role === "owner") {
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    // Admin → pokazujemy tylko admin panel
+    if (role === "admin") {
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    // Pół-admin → pokazujemy tylko pół-admin panel
+    if (role === "half-admin") {
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+      return;
+    }
+
+    // Zwykły gracz → żadnych paneli
+    const adminBtn = document.querySelector(".admin-open-btn");
+    if (adminBtn) adminBtn.remove();
+
+    const halfBtn = document.querySelector(".half-admin-open-btn");
+    if (halfBtn) halfBtn.remove();
+  };
+// === ARCANNA FIX: SHOW REPORT BUTTON ONLY AFTER LOGIN ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Funkcja uruchamiana po zalogowaniu
+  window.afterLoginUI = function () {
+
+    // Jeśli nie ma użytkownika → nic nie pokazujemy
+    if (!currentUser || currentUser.trim() === "") return;
+
+    const role = userRoles[currentUser];
+
+    // ============================================================
+    // 1. NOWY PRZYCISK ZGŁOŚ — TYLKO PO ZALOGOWANIU
+    // ============================================================
+
+    const reportBtn = document.createElement('button');
+    reportBtn.textContent = "ZGŁOŚ";
+    reportBtn.style.position = "fixed";
+    reportBtn.style.right = "20px";
+    reportBtn.style.bottom = "20px";
+    reportBtn.style.zIndex = "9999";
+    reportBtn.style.padding = "12px 20px";
+    reportBtn.style.background = "#d32f2f";
+    reportBtn.style.color = "#fff";
+    reportBtn.style.border = "none";
+    reportBtn.style.borderRadius = "10px";
+    reportBtn.style.fontSize = "18px";
+    reportBtn.style.cursor = "pointer";
+    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
+    document.body.appendChild(reportBtn);
+
+    // Okno zgłoszenia
+    const reportWindow = document.createElement('div');
+    reportWindow.className = "friends-modal hidden";
+    reportWindow.innerHTML = `
+      <div class="friends-window" style="max-width:420px;">
+        <h3>Zgłoszenie gracza</h3>
+
+        <label>Nick gracza</label>
+        <input id="reportNick" placeholder="Nick gracza">
+
+        <label>Opis sytuacji</label>
+        <textarea id="reportText" rows="4" placeholder="Co się stało?"></textarea>
+
+        <button id="sendReportBtn">Wyślij zgłoszenie</button>
+        <button id="closeReportBtn" class="collapse-btn">Zamknij</button>
+      </div>
+    `;
+    document.body.appendChild(reportWindow);
+
+    reportBtn.onclick = () => reportWindow.classList.remove("hidden");
+    reportWindow.querySelector("#closeReportBtn").onclick = () =>
+      reportWindow.classList.add("hidden");
+
+    reportWindow.querySelector("#sendReportBtn").onclick = () => {
+      const nick = reportWindow.querySelector("#reportNick").value.trim();
+      const text = reportWindow.querySelector("#reportText").value.trim();
+
+      if (!nick || !text) {
+        alert("Wypełnij oba pola!");
+        return;
+      }
+
+      if (!window.reports) window.reports = [];
+      reports.push({
+        from: currentUser,
+        target: nick,
+        text,
+        time: new Date().toLocaleString("pl-PL")
+      });
+
+      alert("Zgłoszenie wysłane!");
+      reportWindow.classList.add("hidden");
+    };
+
+    // ============================================================
+    // 2. PANELE TYLKO DLA ODPOWIEDNICH RÓL
+    // ============================================================
+
+    // Właściciel → tylko panel właściciela
+    if (role === "owner") {
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    // Admin → tylko panel admina
+    if (role === "admin") {
+      const halfBtn = document.querySelector(".half-admin-open-btn");
+      if (halfBtn) halfBtn.remove();
+      return;
+    }
+
+    // Pół-admin → tylko panel pół-admina
+    if (role === "half-admin") {
+      const adminBtn = document.querySelector(".admin-open-btn");
+      if (adminBtn) adminBtn.remove();
+      return;
+    }
+
+    // Zwykły gracz → żadnych paneli
+    const adminBtn = document.querySelector(".admin-open-btn");
+    if (adminBtn) adminBtn.remove();
+
+    const halfBtn = document.querySelector(".half-admin-open-btn");
+    if (halfBtn) halfBtn.remove();
+  };
+
+})();
