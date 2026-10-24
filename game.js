@@ -3052,3 +3052,332 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
+// === ARCANNA PASS FIXES (NO DUPLICATE CHARACTERS) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // Funkcja dodająca postać tylko jeśli gracz jej nie ma
+  function giveCharacterOnce(nick, mageId) {
+    if (!window.unlockedMages) window.unlockedMages = {};
+    unlockedMages[nick] = unlockedMages[nick] || [];
+
+    if (!unlockedMages[nick].includes(mageId)) {
+      unlockedMages[nick].push(mageId);
+      return true; // dodano
+    }
+    return false; // już miał
+  }
+
+  // POPRAWKA: SVIP nie dodaje iluzjonisty drugi raz
+  window.giveSVIPCharacter = function (nick) {
+    const added = giveCharacterOnce(nick, "iluzjonista");
+    return added;
+  };
+
+  // POPRAWKA: GVIP dodaje Pioruna tylko raz
+  window.giveGVIPCharacter = function (nick) {
+    const added = giveCharacterOnce(nick, "piorun");
+    return added;
+  };
+
+  // POPRAWKA: PREMIUM dodaje Władcę Orłów tylko raz
+  window.givePremiumCharacter = function (nick) {
+    const added = giveCharacterOnce(nick, "wladca_orlow");
+    return added;
+  };
+
+})();
+// === ARCANNA ADMIN PANEL (NO RESET / NO PASSWORD CHECK) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  const adminPanel = document.createElement('div');
+  adminPanel.className = "friends-modal hidden";
+  adminPanel.innerHTML = `
+    <div class="friends-window" style="max-width:480px;">
+      <h3>ADMIN // PANEL</h3>
+
+      <label>Nick gracza</label>
+      <input id="adminNick" placeholder="Nick gracza">
+
+      <label>Monety</label>
+      <input id="adminCoins" type="number" placeholder="0">
+
+      <label>Czarodziej</label>
+      <select id="adminMage">
+        <option value="burzowy">Burzowy</option>
+        <option value="elektryczny">Elektryczny</option>
+        <option value="iluzjonista">Iluzjonista</option>
+        <option value="piorun">Piorun</option>
+        <option value="wladca_orlow">Władca Orłów</option>
+      </select>
+
+      <button id="adminBan">ZABANUJ</button>
+      <button id="adminUnban">ODBANUJ</button>
+      <button id="adminGiveCoins">DAJ MONETY</button>
+      <button id="adminTakeCoins">ODEJMIJ</button>
+      <button id="adminGiveMage">DAJ CZARODZIEJA</button>
+
+      <button id="adminClose" class="collapse-btn">ZWIŃ</button>
+    </div>
+  `;
+  document.body.appendChild(adminPanel);
+
+  // Przycisk otwierania panelu admina
+  const adminBtn = document.createElement('button');
+  adminBtn.textContent = "ADMIN PANEL";
+  adminBtn.className = "admin-open-btn";
+  document.body.appendChild(adminBtn);
+
+  adminBtn.onclick = () => {
+    if (userRoles[currentUser] !== "admin") return;
+    adminPanel.classList.remove("hidden");
+  };
+
+  adminPanel.querySelector("#adminClose").onclick = () =>
+    adminPanel.classList.add("hidden");
+
+})();
+// === ARCANNA HALF-ADMIN PANEL (LIMITED FUNCTIONS) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  const halfPanel = document.createElement('div');
+  halfPanel.className = "friends-modal hidden";
+  halfPanel.innerHTML = `
+    <div class="friends-window" style="max-width:480px;">
+      <h3>PÓŁ-ADMIN // PANEL</h3>
+
+      <label>Nick gracza</label>
+      <input id="halfNick" placeholder="Nick gracza">
+
+      <button id="halfBan">ZABANUJ</button>
+
+      <label>Zgłoszenie</label>
+      <textarea id="halfReport" placeholder="Co się stało?" rows="3"></textarea>
+      <button id="halfSendReport">WYŚLIJ ZGŁOSZENIE</button>
+
+      <button id="halfClose" class="collapse-btn">ZWIŃ</button>
+    </div>
+  `;
+  document.body.appendChild(halfPanel);
+
+  const halfBtn = document.createElement('button');
+  halfBtn.textContent = "PÓŁ-ADMIN PANEL";
+  halfBtn.className = "admin-open-btn";
+  document.body.appendChild(halfBtn);
+
+  halfBtn.onclick = () => {
+    if (userRoles[currentUser] !== "half-admin") return;
+    halfPanel.classList.remove("hidden");
+  };
+
+  halfPanel.querySelector("#halfClose").onclick = () =>
+    halfPanel.classList.add("hidden");
+
+})();
+// === ARCANNA REPORT BUTTON (BOTTOM RIGHT) ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  if (!window.reports) window.reports = [];
+
+  // ============================================================
+  // PRZYCISK ZGŁOŚ — PRAWY DOLNY RÓG
+  // ============================================================
+
+  const reportBtn = document.createElement('button');
+  reportBtn.textContent = "ZGŁOŚ";
+  reportBtn.style.position = "fixed";
+  reportBtn.style.right = "20px";
+  reportBtn.style.bottom = "20px";
+  reportBtn.style.zIndex = "9999";
+  reportBtn.style.padding = "12px 20px";
+  reportBtn.style.background = "#d32f2f";
+  reportBtn.style.color = "#fff";
+  reportBtn.style.border = "none";
+  reportBtn.style.borderRadius = "10px";
+  reportBtn.style.fontSize = "18px";
+  reportBtn.style.cursor = "pointer";
+  reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
+  document.body.appendChild(reportBtn);
+
+  // ============================================================
+  // OKNO ZGŁOSZENIA
+  // ============================================================
+
+  const reportWindow = document.createElement('div');
+  reportWindow.className = "friends-modal hidden";
+  reportWindow.innerHTML = `
+    <div class="friends-window" style="max-width:420px;">
+      <h3>Zgłoszenie gracza</h3>
+
+      <label>Nick gracza</label>
+      <input id="reportNick" placeholder="Nick gracza">
+
+      <label>Opis sytuacji</label>
+      <textarea id="reportText" rows="4" placeholder="Co się stało?"></textarea>
+
+      <button id="sendReportBtn">Wyślij zgłoszenie</button>
+      <button id="closeReportBtn" class="collapse-btn">Zamknij</button>
+    </div>
+  `;
+  document.body.appendChild(reportWindow);
+
+  // ============================================================
+  // OTWIERANIE OKNA
+  // ============================================================
+
+  reportBtn.onclick = () => {
+    reportWindow.classList.remove("hidden");
+  };
+
+  // ============================================================
+  // ZAMYKANIE OKNA
+  // ============================================================
+
+  reportWindow.querySelector("#closeReportBtn").onclick = () => {
+    reportWindow.classList.add("hidden");
+  };
+
+  // ============================================================
+  // WYSYŁANIE ZGŁOSZENIA
+  // ============================================================
+
+  reportWindow.querySelector("#sendReportBtn").onclick = () => {
+    const nick = reportWindow.querySelector("#reportNick").value.trim();
+    const text = reportWindow.querySelector("#reportText").value.trim();
+
+    if (!nick || !text) {
+      alert("Wypełnij oba pola!");
+      return;
+    }
+
+    reports.push({
+      from: currentUser,
+      target: nick,
+      text,
+      time: new Date().toLocaleString("pl-PL")
+    });
+
+    alert("Zgłoszenie wysłane!");
+
+    reportWindow.classList.add("hidden");
+  };
+
+})();
+// === ARCANNA SHOP FIX + CHARACTER CARDS ===
+// Wklej NA SAMYM DOLE game.js
+
+(function () {
+
+  // ============================================================
+  // 1. USUWAMY STARY PRZYCISK "SKRZYNIE"
+  // ============================================================
+
+  const oldCrateBtn = document.querySelector("#crateBtn");
+  if (oldCrateBtn) oldCrateBtn.remove();
+
+
+  // ============================================================
+  // 2. SKRZYNIA BRELOCZKÓW (TYLKO W SEKCJI BRELOCZKI)
+  // ============================================================
+
+  const keychainSection = document.querySelector("#shopKeychains");
+  if (keychainSection) {
+    const kcCrate = document.createElement("button");
+    kcCrate.textContent = "Skrzynia Breloczków";
+    kcCrate.style.marginTop = "20px";
+    kcCrate.style.padding = "10px 20px";
+    kcCrate.style.background = "#ffca28";
+    kcCrate.style.border = "none";
+    kcCrate.style.borderRadius = "8px";
+    kcCrate.style.cursor = "pointer";
+
+    kcCrate.onclick = () => {
+      alert("Otworzyłeś skrzynię breloczków! (tu dodasz losowanie)");
+    };
+
+    keychainSection.appendChild(kcCrate);
+  }
+
+
+  // ============================================================
+  // 3. SKRZYNIA KAPELUSZY (TYLKO W SEKCJI KAPELUSZE)
+  // ============================================================
+
+  const hatSection = document.querySelector("#shopHats");
+  if (hatSection) {
+    const hatCrate = document.createElement("button");
+    hatCrate.textContent = "Skrzynia Kapeluszy";
+    hatCrate.style.marginTop = "20px";
+    hatCrate.style.padding = "10px 20px";
+    hatCrate.style.background = "#29b6f6";
+    hatCrate.style.border = "none";
+    hatCrate.style.borderRadius = "8px";
+    hatCrate.style.cursor = "pointer";
+
+    hatCrate.onclick = () => {
+      alert("Otworzyłeś skrzynię kapeluszy! (tu dodasz losowanie)");
+    };
+
+    hatSection.appendChild(hatCrate);
+  }
+
+
+  // ============================================================
+  // 4. KARTY POSTACI — DODAJEMY NOWE
+  // ============================================================
+
+  const charSection = document.querySelector("#shopCharacters");
+  if (charSection) {
+
+    const characters = [
+      { id: "elektryczny", name: "Elektryczny", price: 0 },
+      { id: "piorun", name: "Piorun", price: 0 },
+      { id: "wladca_orlow", name: "Władca Orłów", price: 0 },
+      { id: "iluzjonista", name: "Iluzjonista", price: 0 }
+    ];
+
+    characters.forEach(c => {
+      const card = document.createElement("div");
+      card.className = "wizard-card";
+      card.style = `
+        background:#222;
+        color:#fff;
+        padding:15px;
+        border-radius:12px;
+        margin:10px;
+        width:160px;
+        text-align:center;
+        display:inline-block;
+        transition:transform 0.25s ease, box-shadow 0.25s ease;
+      `;
+
+      card.innerHTML = `
+        <h3>${c.name}</h3>
+        <p>Cena: ${c.price === 0 ? "Karnet" : c.price + " monet"}</p>
+      `;
+
+      // Animacja hover
+      card.addEventListener("mouseenter", () => {
+        card.style.transform = "scale(1.15)";
+        card.style.boxShadow = "0 0 18px rgba(255,255,255,0.4)";
+        card.style.zIndex = "1000";
+      });
+
+      card.addEventListener("mouseleave", () => {
+        card.style.transform = "scale(1)";
+        card.style.boxShadow = "none";
+        card.style.zIndex = "1";
+      });
+
+      charSection.appendChild(card);
+    });
+  }
+
+})();
