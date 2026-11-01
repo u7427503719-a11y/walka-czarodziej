@@ -9,7 +9,6 @@ const keychainCollection = document.getElementById('keychainCollection');
 addEventListener('click', event => {
   if (event.target.closest('#backpackButton')) { document.getElementById('backpackModal').classList.remove('hidden'); updateBackpack(); }
   if (event.target.closest('#backpackClose')) document.getElementById('backpackModal').classList.add('hidden');
-  if (event.target.closest('#chestsButton')) { document.getElementById('shop').classList.add('hidden'); chestModal.classList.remove('hidden'); chestResult.textContent = ''; }
   if (event.target.closest('#chestClose')) chestModal.classList.add('hidden');
   if (event.target.closest('#dailyMissionButton')) { careerUi.chestModal.classList.remove('hidden'); careerUi.chestResult.textContent = ''; refreshCareer(); }
   if (event.target.closest('#dailyBoxOpenButton')) openDailyBox();
@@ -17,6 +16,8 @@ addEventListener('click', event => {
   if (event.target.closest('#leaderboardClose')) careerUi.leaderboardModal.classList.add('hidden');
   const chest = event.target.closest('[data-chest]');
   if (chest) openChest(chest.dataset.chest);
+  const pass = event.target.closest('[data-pass]');
+  if (pass) window.buyPass?.(pass.dataset.pass);
 });
 const auth = { screen: document.getElementById('authScreen'), registerTab: document.getElementById('registerTab'), loginTab: document.getElementById('loginTab'), registerForm: document.getElementById('registerForm'), loginForm: document.getElementById('loginForm'), registerNick: document.getElementById('registerNick'), registerPassword: document.getElementById('registerPassword'), registerNickError: document.getElementById('registerNickError'), loginNick: document.getElementById('loginNick'), loginPassword: document.getElementById('loginPassword'), loginError: document.getElementById('loginError') };
 const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), resetRanking: document.getElementById('resetRankingButton'), giveWizard: document.getElementById('giveWizardButton') };
@@ -107,6 +108,8 @@ function ensureOwnerAccount() {
   localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
 }
 function persistCoins() { const balances = getMap('arcanaBalances'); const accounts = getAccounts(); balances[currentUser.toLowerCase()] = coins; if (accounts[currentUser.toLowerCase()]) accounts[currentUser.toLowerCase()].coins = coins; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); localStorage.setItem('arcanaCoins', coins); }
+function persistPlayerData() { if (!currentUser || !window.playerData?.[currentUser]) return; const data = getMap('arcanaPlayerData'); data[currentUser.toLowerCase()] = window.playerData[currentUser]; saveMap('arcanaPlayerData', data); }
+Object.defineProperty(window, 'playerMoney', { configurable: true, get: () => coins, set: value => { coins = Math.max(0, Number(value) || 0); if (currentUser) persistCoins(); } });
 const chests = {
   hats: { rewards: [{ id: 'strength-hat', chance: .01 }, { id: 'guard-hat', chance: .49 }, { id: 'light-hat', chance: .50 }] },
   keychains: { rewards: [{ id: 'strength-charm', chance: .12 }, { id: 'damage-charm', chance: .38 }, { id: 'vitality-charm', chance: .25 }, { id: 'life-charm', chance: .15 }, { id: 'ward-charm', chance: .10 }] }
@@ -128,8 +131,8 @@ function toggleKeychain(id) { const equipped = getMap('arcanaEquipped'); const l
 function combineKeychain(id) { const inventory = getMap('arcanaKeychains'); const owned = inventory[currentUser.toLowerCase()] || []; const count = owned.filter(item => item === id).length; const levels = getMap('arcanaKeychainLevels'); const level = Number(levels[currentUser.toLowerCase()]?.[id] || 0); if (level >= 2 || count <= level + 1) { setToast(level >= 2 ? 'MAKSYMALNY POZIOM POŁĄCZENIA' : 'POTRZEBUJESZ DRUGIEGO TAKIEGO BRELOCZKA'); return; } owned.splice(owned.indexOf(id), 1); inventory[currentUser.toLowerCase()] = owned; levels[currentUser.toLowerCase()] ||= {}; levels[currentUser.toLowerCase()][id] = level + 1; saveMap('arcanaKeychains', inventory); saveMap('arcanaKeychainLevels', levels); updateBackpack(); setToast(`BRELOCZEK POŁĄCZONY // POZIOM ${level + 1}/2`); }
 function equipHat(id) { if (!getHatInventory().includes(id) || !hats[id]) return; const equipped = getMap('arcanaEquippedHat'); equipped[currentUser.toLowerCase()] = equipped[currentUser.toLowerCase()] === id ? '' : id; saveMap('arcanaEquippedHat', equipped); updateBackpack(); updateProfile(); syncProfileToServer(); }
 function combineHat(id) { const inventory = getMap('arcanaHats'); const owned = inventory[currentUser.toLowerCase()] || []; const count = owned.filter(item => item === id).length; const levels = getMap('arcanaHatLevels'); const level = Number(levels[currentUser.toLowerCase()]?.[id] || 0); if (level >= 2 || count <= level + 1) { setToast(level >= 2 ? 'MAKSYMALNY POZIOM KAPELUSZA' : 'POTRZEBUJESZ DRUGIEGO TAKIEGO KAPELUSZA'); return; } owned.splice(owned.indexOf(id), 1); inventory[currentUser.toLowerCase()] = owned; levels[currentUser.toLowerCase()] ||= {}; levels[currentUser.toLowerCase()][id] = level + 1; saveMap('arcanaHats', inventory); saveMap('arcanaHatLevels', levels); updateBackpack(); setToast(`KAPELUSZ POŁĄCZONY // POZIOM ${level + 1}/2`); }
-function updateBackpack() { const owned = getKeychains().filter(id => keychains[id]); const equipped = getEquippedKeychains(); const ownedHats = getHatInventory().filter(id => hats[id]); const equippedHat = getEquippedHat(); const empty = document.querySelector('.backpack-empty'); empty.classList.toggle('hidden', owned.length + ownedHats.length > 0); keychainCollection.classList.toggle('hidden', owned.length === 0); keychainCollection.innerHTML = owned.map(id => { const level = getKeychainLevel(id); const copies = owned.filter(item => item === id).length; return `<div class="keychain-card"><b>${keychains[id].name}</b><span>${keychains[id].rarity} // POZIOM ${level}/2</span><span>${equipped.includes(id) ? 'ZAŁOŻONY' : ''} ${copies} SZT.</span><div class="keychain-actions"><button type="button" data-equip="${id}">${equipped.includes(id) ? 'ZDEJMIJ' : 'ZAŁÓŻ'}</button><button type="button" data-combine="${id}" ${level >= 2 || copies <= level + 1 ? 'disabled' : ''}>POŁĄCZ</button></div></div>`; }).join(''); const hatCollection = document.getElementById('hatCollection'); hatCollection.classList.toggle('hidden', ownedHats.length === 0); hatCollection.innerHTML = [...new Set(ownedHats)].map(id => { const copies = ownedHats.filter(item => item === id).length; const level = getHatLevel(id); return `<div class="keychain-card"><b>${hats[id].name}</b><span>${hats[id].rarity} // POZIOM ${level}/2</span><span>${equippedHat === id ? 'ZAŁOŻONY' : ''} ${copies} SZT.</span><div class="keychain-actions"><button type="button" data-hat-equip="${id}">${equippedHat === id ? 'ZDEJMIJ' : 'ZAŁÓŻ'}</button><button type="button" data-hat-combine="${id}" ${level >= 2 || copies <= level + 1 ? 'disabled' : ''}>POŁĄCZ</button></div></div>`; }).join(''); }
-function openChest(id) { const chest = chests[id]; if (!chest || !currentUser) return; const roll = Math.random(); let total = 0; const reward = chest.rewards.find(item => { total += item.chance; return roll < total; })?.id; if (!reward) return; if (hats[reward]) { const inventory = getMap('arcanaHats'); inventory[currentUser.toLowerCase()] = [...(inventory[currentUser.toLowerCase()] || []), reward]; saveMap('arcanaHats', inventory); updateBackpack(); chestResult.textContent = `${hats[reward].name} DODANY DO PLECAKA`; } else { grantKeychain(reward); chestResult.textContent = `${keychains[reward].name} DODANY DO PLECAKA`; } }
+function updateBackpack() { const owned = getKeychains().filter(id => keychains[id]); const equipped = getEquippedKeychains(); const ownedHats = getHatInventory().filter(id => hats[id]); const equippedHat = getEquippedHat(); keychainCollection.classList.toggle('hidden', owned.length === 0); keychainCollection.innerHTML = owned.map(id => { const level = getKeychainLevel(id); const copies = owned.filter(item => item === id).length; return `<div class="keychain-card"><b>${keychains[id].name}</b><span>${keychains[id].rarity} // POZIOM ${level}/2</span><span>${equipped.includes(id) ? 'ZAŁOŻONY' : ''} ${copies} SZT.</span><div class="keychain-actions"><button type="button" data-equip="${id}">${equipped.includes(id) ? 'ZDEJMIJ' : 'ZAŁÓŻ'}</button><button type="button" data-combine="${id}" ${level >= 2 || copies <= level + 1 ? 'disabled' : ''}>POŁĄCZ</button></div></div>`; }).join(''); const hatCollection = document.getElementById('hatCollection'); hatCollection.classList.toggle('hidden', ownedHats.length === 0); hatCollection.innerHTML = [...new Set(ownedHats)].map(id => { const copies = ownedHats.filter(item => item === id).length; const level = getHatLevel(id); return `<div class="keychain-card"><b>${hats[id].name}</b><span>${hats[id].rarity} // POZIOM ${level}/2</span><span>${equippedHat === id ? 'ZAŁOŻONY' : ''} ${copies} SZT.</span><div class="keychain-actions"><button type="button" data-hat-equip="${id}">${equippedHat === id ? 'ZDEJMIJ' : 'ZAŁÓŻ'}</button><button type="button" data-hat-combine="${id}" ${level >= 2 || copies <= level + 1 ? 'disabled' : ''}>POŁĄCZ</button></div></div>`; }).join(''); }
+function openChest(id) { const chest = chests[id]; if (!chest || !currentUser) return; const roll = Math.random(); let total = 0; const reward = chest.rewards.find(item => { total += item.chance; return roll < total; })?.id; if (!reward) return; let rewardName; if (hats[reward]) { const inventory = getMap('arcanaHats'); inventory[currentUser.toLowerCase()] = [...(inventory[currentUser.toLowerCase()] || []), reward]; saveMap('arcanaHats', inventory); updateBackpack(); rewardName = hats[reward].name; } else { grantKeychain(reward); rewardName = keychains[reward].name; } const result = `${rewardName} DODANY DO PLECAKA`; document.getElementById('backpackResult').textContent = result; document.getElementById(id === 'hats' ? 'shopHatChestResult' : 'shopKeychainChestResult').textContent = result; }
 function updateCareerUI() { careerUi.dailyProgress.textContent = `WYGRANE DZISIAJ: ${careerProgress.wins}/5`; careerUi.boxCount.textContent = `DOSTĘPNE SKRZYNIE: ${careerProgress.boxes}/5`; careerUi.dailyBadge.textContent = `${careerProgress.wins}/5`; careerUi.boxButton.disabled = careerProgress.boxes < 1 || careerProgress.opening; careerUi.boxButton.textContent = careerProgress.opening ? 'OTWIERANIE...' : 'OTWÓRZ SKRZYNIĘ DZIENNĄ'; }
 function refreshCareer() { if (!currentUser) return; connectMatchSocket(() => sendNetwork({ type: 'career-get' })); }
 function openDailyBox() { if (!currentUser || careerProgress.boxes < 1 || careerProgress.opening) return; careerProgress.opening = true; updateCareerUI(); connectMatchSocket(() => sendNetwork({ type: 'daily-box-open' })); }
@@ -183,8 +186,8 @@ async function changeAccountPassword(event) { event.preventDefault(); const mess
 function updateAccountDirectory() { const accounts = getAccounts(); const entries = Object.entries(accounts).filter(([, account]) => account?.nick).sort((left, right) => left[1].nick.localeCompare(right[1].nick)); accountUi.list.innerHTML = entries.map(([key, account]) => `<button type="button" data-account-view="${encodeURIComponent(key)}">${escapeHtml(account.nick)}</button>`).join('') || '<span class="friends-empty">BRAK KONT</span>'; }
 function showAccountDetails(key) { const account = getAccounts()[key]; if (!account) return; const balances = getMap('arcanaBalances'); const coinsForAccount = Number(balances[key] ?? account.coins ?? 0); const owned = Array.from(new Set(['apprentice', ...(account.wizards || []), ...(getMap('arcanaOwned')[key] || [])])); accountUi.name.textContent = account.nick; accountUi.coins.textContent = `MONETY: ${coinsForAccount}`; accountUi.characters.textContent = `POSTACIE: ${owned.map(id => wizards[id]?.name || id).join(', ')}`; accountUi.delete.disabled = key === OWNER_NICK.toLowerCase(); accountPendingDelete = key; accountUi.details.classList.remove('hidden'); }
 function requestAccountDelete() { if (!accountPendingDelete || accountPendingDelete === OWNER_NICK.toLowerCase()) return; accountUi.confirm.classList.remove('hidden'); }
-function deleteAccountConfirmed() { const key = accountPendingDelete; const accounts = getAccounts(); if (!key || key === OWNER_NICK.toLowerCase() || !accounts[key]) { accountUi.confirm.classList.add('hidden'); return; } const nick = accounts[key].nick; delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked'].forEach(name => { const map = getMap(name); delete map[key]; saveMap(name, map); }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); delete map[key]; Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).filter(friend => friend.toLowerCase() !== key); }); saveMap(name, map); }); accountUi.confirm.classList.add('hidden'); accountUi.details.classList.add('hidden'); accountPendingDelete = ''; updateAccountDirectory(); if (key === currentUser.toLowerCase()) logoutAccount(); else setToast(`USUNIĘTO KONTO ${nick}`); }
-function clearNewProgress(key) { [['arcanaHats', []], ['arcanaHatLevels', {}], ['arcanaEquippedHat', ''], ['arcanaWizardWins', {}], ['arcanaSelectedTitle', '']].forEach(([name, empty]) => { const map = getMap(name); map[key] = empty; saveMap(name, map); }); }
+function deleteAccountConfirmed() { const key = accountPendingDelete; const accounts = getAccounts(); if (!key || key === OWNER_NICK.toLowerCase() || !accounts[key]) { accountUi.confirm.classList.add('hidden'); return; } const nick = accounts[key].nick; delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaPlayerData'].forEach(name => { const map = getMap(name); delete map[key]; saveMap(name, map); }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); delete map[key]; Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).filter(friend => friend.toLowerCase() !== key); }); saveMap(name, map); }); accountUi.confirm.classList.add('hidden'); accountUi.details.classList.add('hidden'); accountPendingDelete = ''; updateAccountDirectory(); if (key === currentUser.toLowerCase()) logoutAccount(); else setToast(`USUNIĘTO KONTO ${nick}`); }
+function clearNewProgress(key) { [['arcanaHats', []], ['arcanaHatLevels', {}], ['arcanaEquippedHat', ''], ['arcanaWizardWins', {}], ['arcanaSelectedTitle', ''], ['arcanaPlayerData', {}]].forEach(([name, empty]) => { const map = getMap(name); map[key] = empty; saveMap(name, map); }); }
 const originalDeleteAccountConfirmed = deleteAccountConfirmed;
 deleteAccountConfirmed = function () { const key = accountPendingDelete; if (key && key !== OWNER_NICK.toLowerCase() && getAccounts()[key]) clearNewProgress(key); originalDeleteAccountConfirmed(); };
 function saveAvatar() { if (!currentUser) return; const avatars = getMap('arcanaAvatars'); avatars[currentUser.toLowerCase()] = profileUi.editor.toDataURL('image/png'); saveMap('arcanaAvatars', avatars); drawAvatar(profileUi.avatar, avatars[currentUser.toLowerCase()], currentUser); setToast('AVATAR ZAPISANY'); }
@@ -201,7 +204,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; window.playerData[nick] = window.playerData[nick] || {}; logoutIntentional = false; const key = nick.toLowerCase(); const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateShop(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -291,7 +294,7 @@ function clearLocalAccountProgress(key) {
     'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
     'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
     'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
-    'arcanaFriendRequests', 'arcanaBans'
+    'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData'
   ].forEach(name => {
     const map = getMap(name);
     delete map[key];
@@ -606,7 +609,7 @@ function commitTrade() { if (!tradeState.partner || tradeState.accepted) return;
 function completeTrade(message) { applyTradeOffer(message.ownOffer.items || [], message.ownOffer.coins || 0, false); applyTradeOffer(message.receivedOffer.items || [], message.receivedOffer.coins || 0, true); tradeUi.status.textContent = 'WYMIANA ZAKOŃCZONA'; setToast('WYMIANA ZAKOŃCZONA'); setTimeout(() => tradeUi.modal.classList.add('hidden'), 900); }
 function showChatBubble(nick, text) { chatUi.bubble.textContent = `${nick}: ${text}`; chatUi.bubble.classList.remove('hidden'); const isOwn = nick.toLowerCase() === currentUser.toLowerCase(); chatUi.bubble.style.left = `${(isOwn ? p1.x : p2.x)}px`; chatUi.bubble.style.top = `${(isOwn ? p1.y : p2.y) - 72}px`; clearTimeout(showChatBubble.timer); showChatBubble.timer = setTimeout(() => chatUi.bubble.classList.add('hidden'), 5000); }
 function sendChat(text) { const clean = String(text || '').trim().slice(0, 120); if (!clean) return; if (onlineMatch) sendNetwork({ type: 'chat', text: clean }); else showChatBubble(currentUser, clean); chatUi.input.value = ''; chatUi.modal.classList.add('hidden'); }
-function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); }
+function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); window.refreshShopCollections?.(); window.updatePassShop?.(); }
 function updatePrivateWizardCard() { let card = ui.shop.querySelector('.wizard-card[data-wizard="october"]'); if (card) return; card = document.createElement('button'); card.type = 'button'; card.className = 'wizard-card'; card.dataset.wizard = 'october'; const name = document.createElement('b'); name.textContent = wizards.october.name; const label = document.createElement('span'); label.textContent = 'TYLKO WŁAŚCICIEL'; card.append(name, label); card.addEventListener('click', () => openWizard('october')); ui.shop.querySelector('.wizard-offers').append(card); }
 function escapeHtml(value) { return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character])); }
 function updateFriends() { const key = currentUser.toLowerCase(); const friends = getMap('arcanaFriends')[key] || []; const requests = getMap('arcanaFriendRequests')[key] || []; ui.friendsList.innerHTML = friends.length ? friends.map(nick => `<div class="friend-item"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><button type="button" data-group-invite="${encodeURIComponent(nick)}">ZAPROŚ DO GRUPY</button></div>`).join('') : '<div class="friends-empty">BRAK ZNAJOMYCH</div>'; ui.suggestionsList.innerHTML = requests.length ? requests.map(nick => `<div class="friend-item friend-request"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><span class="friend-request-actions"><button type="button" data-accept="${encodeURIComponent(nick)}">✓</button><button type="button" data-reject="${encodeURIComponent(nick)}">X</button></span></div>`).join('') : '<div class="friends-empty">BRAK ZAPROSZEŃ</div>'; }
@@ -1132,6 +1135,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     <button data-shop="characters" class="active">POSTACIE</button>
     <button data-shop="keychains">BRELOCZKI</button>
     <button data-shop="hats">KAPELUSZE</button>
+    <button data-shop="passes">KARNETY</button>
   `;
 
   // Wstawiamy zakładki na górę sklepu
@@ -1141,23 +1145,36 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const charactersSection = document.createElement('div');
   const keychainsSection = document.createElement('div');
   const hatsSection = document.createElement('div');
+  const passesSection = document.createElement('div');
 
   charactersSection.id = 'shopCharacters';
   keychainsSection.id = 'shopKeychains';
   hatsSection.id = 'shopHats';
+  passesSection.id = 'shopPasses';
 
-  charactersSection.innerHTML = `<div class="wizard-offers"></div>`;
-  keychainsSection.innerHTML = `<div class="keychain-collection"></div>`;
-  hatsSection.innerHTML = `<div class="backpack-empty"><strong>Brak kapeluszy</strong><span>Otwórz skrzynki aby zdobyć!</span></div>`;
+  const wizardOffers = shopWindow.querySelector('.wizard-offers');
+  const wizardDetail = shopWindow.querySelector('.wizard-detail');
+  const passShop = shopWindow.querySelector('.pass-shop');
+  const ownedEmpty = document.createElement('p');
+  ownedEmpty.className = 'shop-owned-empty hidden';
+  ownedEmpty.textContent = 'BRAK POSIADANYCH PRZEDMIOTÓW W TEJ KATEGORII';
+  charactersSection.append(wizardOffers, wizardDetail);
+  keychainsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="keychains">OTWÓRZ SKRZYNIĘ Z BRELOCZKAMI</button><div class="keychain-collection"></div><div class="shop-chest-result" id="shopKeychainChestResult"></div>`;
+  hatsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="hats">OTWÓRZ SKRZYNIĘ Z KAPELUSZAMI</button><div class="hat-collection"></div><div class="shop-chest-result" id="shopHatChestResult"></div>`;
+  keychainsSection.appendChild(ownedEmpty.cloneNode(true));
+  hatsSection.appendChild(ownedEmpty.cloneNode(true));
+  passesSection.append(passShop);
 
   // Dodajemy sekcje do sklepu
   shopWindow.appendChild(charactersSection);
   shopWindow.appendChild(keychainsSection);
   shopWindow.appendChild(hatsSection);
+  shopWindow.appendChild(passesSection);
 
   // Domyślnie widoczna sekcja POSTACIE
   keychainsSection.style.display = 'none';
   hatsSection.style.display = 'none';
+  passesSection.style.display = 'none';
 
   // Obsługa przełączania zakładek
   tabs.addEventListener('click', (e) => {
@@ -1172,20 +1189,61 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       charactersSection.style.display = 'block';
       keychainsSection.style.display = 'none';
       hatsSection.style.display = 'none';
+      passesSection.style.display = 'none';
     }
 
     if (mode === 'keychains') {
       charactersSection.style.display = 'none';
       keychainsSection.style.display = 'block';
       hatsSection.style.display = 'none';
+      passesSection.style.display = 'none';
     }
 
     if (mode === 'hats') {
       charactersSection.style.display = 'none';
       keychainsSection.style.display = 'none';
       hatsSection.style.display = 'block';
+      passesSection.style.display = 'none';
+    }
+
+    if (mode === 'passes') {
+      charactersSection.style.display = 'none';
+      keychainsSection.style.display = 'none';
+      hatsSection.style.display = 'none';
+      passesSection.style.display = 'block';
+      window.updatePassShop?.();
     }
   });
+
+  window.refreshShopCollections = function () {
+    const shopKeychains = keychainsSection.querySelector('.keychain-collection');
+    const shopHats = hatsSection.querySelector('.hat-collection');
+    shopKeychains.innerHTML = keychainCollection.innerHTML;
+    shopHats.innerHTML = document.getElementById('hatCollection').innerHTML;
+    const hasKeychains = shopKeychains.querySelector('.keychain-card') !== null;
+    const hasHats = shopHats.querySelector('.keychain-card') !== null;
+    keychainsSection.querySelector('.shop-chest-button').classList.toggle('hidden', ownedOnly);
+    hatsSection.querySelector('.shop-chest-button').classList.toggle('hidden', ownedOnly);
+    shopKeychains.classList.toggle('hidden', ownedOnly && !hasKeychains);
+    shopHats.classList.toggle('hidden', ownedOnly && !hasHats);
+    keychainsSection.querySelector('.shop-owned-empty').classList.toggle('hidden', !ownedOnly || hasKeychains);
+    hatsSection.querySelector('.shop-owned-empty').classList.toggle('hidden', !ownedOnly || hasHats);
+    keychainsSection.querySelector('.shop-chest-result').classList.toggle('hidden', ownedOnly);
+    hatsSection.querySelector('.shop-chest-result').classList.toggle('hidden', ownedOnly);
+  };
+  const updateBackpackAndShop = updateBackpack;
+  updateBackpack = function () { updateBackpackAndShop(); window.refreshShopCollections(); };
+  window.refreshShopCollections();
+  [keychainsSection, hatsSection].forEach(section => section.addEventListener('click', event => {
+    const equip = event.target.closest('[data-equip]');
+    const combine = event.target.closest('[data-combine]');
+    const hatEquip = event.target.closest('[data-hat-equip]');
+    const hatCombine = event.target.closest('[data-hat-combine]');
+    if (equip) toggleKeychain(equip.dataset.equip);
+    if (combine) combineKeychain(combine.dataset.combine);
+    if (hatEquip) equipHat(hatEquip.dataset.hatEquip);
+    if (hatCombine) combineHat(hatCombine.dataset.hatCombine);
+  }));
 
   // Automatyczne ładowanie danych postaci
   window.loadShopCharacters = function (data) {
@@ -2436,14 +2494,6 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const shopWindow = document.querySelector('.shop-window');
   if (!shopWindow) return;
 
-  const tabs = document.querySelector('.mode-buttons');
-  if (tabs) {
-    const vipTab = document.createElement('button');
-    vipTab.textContent = "KARNETY";
-    vipTab.dataset.shop = "vip";
-    tabs.appendChild(vipTab);
-  }
-
   // Sekcja VIP
   const vipSection = document.createElement('div');
   vipSection.id = "shopVip";
@@ -2474,18 +2524,6 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     </div>
   `;
   shopWindow.appendChild(vipSection);
-
-  // Obsługa zakładek
-  tabs.addEventListener('click', (e) => {
-    if (e.target.tagName !== 'BUTTON') return;
-
-    const mode = e.target.dataset.shop;
-
-    document.querySelector('#shopCharacters').style.display = mode === 'characters' ? 'block' : 'none';
-    document.querySelector('#shopKeychains').style.display = mode === 'keychains' ? 'block' : 'none';
-    document.querySelector('#shopHats').style.display = mode === 'hats' ? 'block' : 'none';
-    vipSection.style.display = mode === 'vip' ? 'block' : 'none';
-  });
 
   // ============================================================
   // 2. LOGIKA KUPNA VIP
@@ -2965,82 +3003,63 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   // FUNKCJA KUPNA KARNETU (WYWOŁYWANA PRZY KUPNIE)
   // ============================================================
 
+  function updatePassShop() {
+    const account = currentUser ? playerData[currentUser] : null;
+    let hasOwnedPass = false;
+    document.querySelectorAll('[data-pass]').forEach(button => {
+      const passId = button.dataset.pass;
+      const owned = account?.ownedPass?.includes(passId);
+      const active = account?.activePass === passId;
+      hasOwnedPass ||= Boolean(owned);
+      button.classList.toggle('hidden', ownedOnly && !owned);
+      button.classList.toggle('active', active);
+      button.querySelector('span').textContent = active ? 'AKTYWNY' : owned ? 'POSIADANY // UŻYJ' : `${PASS_PRICES[passId].toLocaleString('pl-PL')} MONET`;
+    });
+    document.getElementById('passOwnedEmpty')?.classList.toggle('hidden', !ownedOnly || hasOwnedPass);
+  }
+  window.updatePassShop = updatePassShop;
+
   window.buyPass = function (passId) {
-
     const price = PASS_PRICES[passId];
-    const name = PASS_NAMES[passId];
+    if (!currentUser || !price) return;
+    if (!window.playerData) window.playerData = {};
+    const account = playerData[currentUser] ||= {};
+    const ownedPass = Array.isArray(account.ownedPass) ? account.ownedPass : [];
+    account.ownedPass = ownedPass;
 
-    const money = window.playerMoney || 0;
-    if (money < price) {
-      alert("Nie masz wystarczająco monet!");
+    if (ownedPass.includes(passId)) {
+      account.activePass = passId;
+      ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = id === passId; });
+      persistPlayerData();
+      updatePassShop();
+      document.getElementById('passShopStatus').textContent = `${PASS_NAMES[passId]} JEST TERAZ AKTYWNY`;
       return;
     }
 
-    const ownedPass = playerData[currentUser].ownedPass || [];
-    const activePass = playerData[currentUser].activePass || null;
-
-    // Jeśli gracz nie ma żadnego karnetu → kupuje normalnie
-    if (!activePass) {
-      window.playerMoney -= price;
-      ownedPass.push(passId);
-      playerData[currentUser].ownedPass = ownedPass;
-      playerData[currentUser].activePass = passId;
-      alert("Kupiono i aktywowano karnet: " + name);
+    const activePass = account.activePass && PASS_PRICES[account.activePass] ? account.activePass : null;
+    const refund = activePass ? Math.floor(PASS_PRICES[activePass] * .75) : 0;
+    const sellActive = Boolean(activePass) && confirm(`Masz aktywny karnet ${PASS_NAMES[activePass]}. Czy sprzedać go za ${refund.toLocaleString('pl-PL')} monet i aktywować ${PASS_NAMES[passId]}?`);
+    const availableCoins = coins + (sellActive ? refund : 0);
+    if (availableCoins < price) {
+      document.getElementById('passShopStatus').textContent = `BRAKUJE ${Math.ceil(price - availableCoins).toLocaleString('pl-PL')} MONET`;
       return;
     }
 
-    // Jeśli gracz ma aktywny karnet → pytamy co zrobić
-    const oldName = PASS_NAMES[activePass];
-
-    const sell = confirm(
-      "Masz już aktywny karnet: " + oldName +
-      "\nCzy sprzedać go za " + Math.floor(PASS_PRICES[activePass] * 0.75) + " monet?"
-    );
-
-    if (sell) {
-      // Sprzedaż starego karnetu
-      const refund = Math.floor(PASS_PRICES[activePass] * 0.75);
-      window.playerMoney += refund;
-
-      // Usuwamy stary karnet
-      playerData[currentUser].ownedPass =
-        ownedPass.filter(p => p !== activePass);
-
-      // Kupujemy nowy
-      window.playerMoney -= price;
-      ownedPass.push(passId);
-      playerData[currentUser].ownedPass = ownedPass;
-      playerData[currentUser].activePass = passId;
-
-      alert("Sprzedano " + oldName + " i aktywowano " + name);
-      return;
+    if (sellActive) {
+      account.ownedPass = ownedPass.filter(id => id !== activePass);
+      account.activePass = passId;
+    } else if (!activePass) {
+      account.activePass = passId;
     }
-
-    // Jeśli NIE sprzedajemy → pytamy który karnet ma być aktywny
-    const choice = prompt(
-      "Którego karnetu użyć?\n" +
-      "1 — " + oldName + "\n" +
-      "2 — ŻADNEGO\n" +
-      "3 — " + name
-    );
-
-    // Kupujemy nowy karnet (ale nie aktywujemy)
-    window.playerMoney -= price;
-    ownedPass.push(passId);
-    playerData[currentUser].ownedPass = ownedPass;
-
-    if (choice === "1") {
-      playerData[currentUser].activePass = activePass;
-      alert("Aktywny karnet: " + oldName);
-    } else if (choice === "2") {
-      playerData[currentUser].activePass = null;
-      alert("Nie używasz żadnego karnetu.");
-    } else if (choice === "3") {
-      playerData[currentUser].activePass = passId;
-      alert("Aktywny karnet: " + name);
-    } else {
-      alert("Wybrano niepoprawną opcję — pozostawiamy stary karnet aktywny.");
-    }
+    account.ownedPass = Array.from(new Set([...account.ownedPass, passId]));
+    ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = account.activePass === id; });
+    coins = availableCoins - price;
+    persistCoins();
+    persistPlayerData();
+    updatePassShop();
+    document.getElementById('passShopStatus').textContent = sellActive
+      ? `SPRZEDANO ${PASS_NAMES[activePass]} I AKTYWOWANO ${PASS_NAMES[passId]}`
+      : `KUPIONO ${PASS_NAMES[passId]}${account.activePass === passId ? ' // AKTYWNY' : ''}`;
   };
 
 })();
