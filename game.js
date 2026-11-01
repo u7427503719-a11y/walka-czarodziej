@@ -19,7 +19,7 @@ addEventListener('click', event => {
   if (chest) openChest(chest.dataset.chest);
 });
 const auth = { screen: document.getElementById('authScreen'), registerTab: document.getElementById('registerTab'), loginTab: document.getElementById('loginTab'), registerForm: document.getElementById('registerForm'), loginForm: document.getElementById('loginForm'), registerNick: document.getElementById('registerNick'), registerPassword: document.getElementById('registerPassword'), registerNickError: document.getElementById('registerNickError'), loginNick: document.getElementById('loginNick'), loginPassword: document.getElementById('loginPassword'), loginError: document.getElementById('loginError') };
-const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), giveWizard: document.getElementById('giveWizardButton') };
+const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), resetRanking: document.getElementById('resetRankingButton'), giveWizard: document.getElementById('giveWizardButton') };
 ownerUi.password = document.getElementById('ownerPassword');
 ownerUi.verifyPassword = document.getElementById('verifyOwnerPasswordButton');
 ownerUi.grantOctober = document.getElementById('grantOctoberButton');
@@ -158,6 +158,22 @@ function applyDailyBoxReward(reward) {
 
 
 function updateTitleChoices() { const wins = getMap('arcanaWizardWins')[currentUser.toLowerCase()] || {}; const selected = getMap('arcanaSelectedTitle')[currentUser.toLowerCase()] || ''; const earned = Object.keys(wins).filter(id => wins[id] >= 500 && wizards[id]); profileUi.title.innerHTML = '<option value="">BRAK TYTUŁU</option>' + earned.map(id => `<option value="${id}">${wizardTitles[id]}</option>`).join(''); profileUi.title.value = earned.includes(selected) ? selected : ''; }
+function drawAvatar(canvas, data, nick) {
+  const context = canvas.getContext('2d');
+  const { width, height } = canvas;
+  context.clearRect(0, 0, width, height);
+  context.fillStyle = '#101936';
+  context.fillRect(0, 0, width, height);
+  context.fillStyle = '#73e1dd';
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.font = `700 ${Math.floor(height * 0.55)}px 'Barlow Condensed', sans-serif`;
+  context.fillText((String(nick || '?').trim().charAt(0) || '?').toUpperCase(), width / 2, height / 2);
+  if (!data) return;
+  const image = new Image();
+  image.onload = () => context.drawImage(image, 0, 0, width, height);
+  image.src = data;
+}
 function updateProfile() { if (!currentUser) return; const key = currentUser.toLowerCase(); const equipped = getEquippedKeychains(); const dropMap = getMap('arcanaDropCharm'); const previous = dropMap[key]; profileUi.dropCharm.innerHTML = equipped.length ? equipped.map(id => `<option value="${id}">${keychains[id].name}</option>`).join('') : '<option value="">BRAK ZAŁOŻONYCH BRELOCZKÓW</option>'; profileUi.dropCharm.disabled = equipped.length === 0; profileUi.dropCharm.value = equipped.includes(previous) ? previous : (equipped[0] || ''); if (equipped.length && !equipped.includes(previous)) { dropMap[key] = equipped[0]; saveMap('arcanaDropCharm', dropMap); } profileUi.dropEnabled.checked = Boolean(getMap('arcanaDropEnabled')[key]); profileUi.dropEnabled.disabled = equipped.length === 0; updateTitleChoices(); }
 function openProfile() { const key = currentUser.toLowerCase(); profileUi.name.textContent = getAccounts()[key]?.nick || currentUser; profileUi.modal.classList.remove('hidden'); updateProfile(); updateAccountDirectory(); const avatar = getMap('arcanaAvatars')[key] || ''; drawAvatar(profileUi.avatar, avatar, currentUser); drawAvatar(profileUi.editor, avatar, currentUser); }
 function recordWizardWin() { if (matchWinRecorded || !currentUser) return; matchWinRecorded = true; const key = currentUser.toLowerCase(); const wins = getMap('arcanaWizardWins'); wins[key] ||= {}; const previous = Number(wins[key][selectedWizard] || 0); wins[key][selectedWizard] = previous + 1; saveMap('arcanaWizardWins', wins); if (previous < 500 && wins[key][selectedWizard] >= 500) setToast(`TYTUŁ ODBLOKOWANY: ${wizardTitles[selectedWizard]}`); updateTitleChoices(); connectMatchSocket(() => sendNetwork({ type: 'career-win' })); }
@@ -185,7 +201,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; logoutIntentional = false; const key = nick.toLowerCase(); const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateShop(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; window.playerData[nick] = window.playerData[nick] || {}; logoutIntentional = false; const key = nick.toLowerCase(); const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateShop(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -201,6 +217,14 @@ function logoutAccount() {
   onlineMatch = false;
   joined = false;
   running = false;
+  gameStartToken += 1;
+  clearTimeout(rankedSearchTimer);
+  randomQueued = false;
+  rankedGameActive = false;
+  ui.reveal.classList.add('hidden');
+  ui.result.classList.add('hidden');
+  ui.start.classList.remove('hidden');
+  updateDeviceControls();
   const key = currentUser.toLowerCase();
   const blockedMatches = getMap('arcanaMatchBlocked');
   delete blockedMatches[key];
@@ -214,9 +238,12 @@ function logoutAccount() {
     localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
   }
   currentUser = '';
+  syncAccountRoleUi();
   ui.playerName.textContent = '';
   profileUi.button.classList.add('hidden');
   profileUi.modal.classList.add('hidden');
+  document.getElementById('rankingModal')?.classList.add('hidden');
+  careerUi.leaderboardModal.classList.add('hidden');
   ui.logout.classList.add('hidden');
   ownerUi.panel.classList.add('hidden');
   document.getElementById('deviceScreen').classList.add('hidden');
@@ -246,6 +273,7 @@ function applyInactivePenalty() {
   localStorage.setItem('arcanaCoins', String(nextBalance));
   setToast('-300 MONET ZA NIEWYLOGOWANIE');
   currentUser = '';
+  syncAccountRoleUi();
   ui.playerName.textContent = '';
   profileUi.button.classList.add('hidden');
   profileUi.modal.classList.add('hidden');
@@ -284,16 +312,29 @@ function normalizeLocalAccount(rawAccount = {}, fallbackNick = '') {
   normalized.serverSynced = true;
   return normalized;
 }
-async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; if (findLocalAccountEntryByNick(nick)) { auth.registerNickError.textContent = 'KONTO O TYM NICKU JUŻ ISTNIEJE'; return; } try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
-async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const legacy = accounts[key]; const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const legacyAccount = legacy?.nick?.trim().toLowerCase() === key && legacy.password === password ? { nick: legacy.nick, password: legacy.password } : undefined; const remote = await authRequest('login', { nick, password, ...(legacyAccount ? { legacyAccount } : {}) }); const accountKey = remote.nick.toLowerCase(); const merged = normalizeLocalAccount({ ...(accounts[accountKey] || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [], coins: Number(accounts[accountKey]?.coins ?? 0) }, remote.nick); accounts[accountKey] = merged; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { if (legacy && legacy.password && legacy.password !== password) { delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); } auth.loginError.textContent = error.message; } }
+async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; if (findLocalAccountEntryByNick(nick)) { auth.registerNickError.textContent = 'TAKIE KONTO JUŻ ISTNIEJE'; return; } try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
+async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const remote = await authRequest('login', { nick, password }); const accountKey = remote.nick.toLowerCase(); const merged = normalizeLocalAccount({ ...(accounts[accountKey] || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [], coins: Number(accounts[accountKey]?.coins ?? 0) }, remote.nick); accounts[accountKey] = merged; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.loginError.textContent = error.message; } }
 function ownerTarget() { const key = ownerUi.target.value.trim().toLowerCase(); return key; }
 function ownerResult(text) { ownerUi.message.textContent = text; }
 function isOwner() { return OWNER_NICKS.includes(currentUser.toLowerCase()); }
 function isStaff() { const account = getAccounts()[currentUser.toLowerCase()]; return account?.role === 'owner' || account?.role === 'admin'; }
+function syncAccountRoleUi() {
+  const accountRole = currentUser ? getAccounts()[currentUser.toLowerCase()]?.role || 'user' : '';
+  const role = accountRole;
+  window.userRoles = window.userRoles || {};
+  if (currentUser) window.userRoles[currentUser] = role;
+  document.getElementById('reportBtn')?.classList.toggle('hidden', !currentUser);
+  const adminButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'ADMIN PANEL');
+  adminButton?.classList.toggle('hidden', !currentUser || !['owner', 'admin'].includes(role));
+  const halfAdminButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'PÓŁ-ADMIN PANEL');
+  halfAdminButton?.classList.toggle('hidden', !currentUser || role !== 'half-admin');
+}
 async function ownerRequest(action, data) { const response = await fetch(`/api/owner/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'BŁĄD SERWERA'); return result; }
 async function verifyOwnerPassword() { ownerPasswordVerified = false; verifiedOwnerPassword = ''; ownerUi.grantOctober.classList.add('hidden'); if (!isOwner() || !ownerUi.password.value) { ownerResult('WPISZ HASŁO WŁAŚCICIELA'); return; } try { await ownerRequest('verify-password', { ownerNick: currentUser, password: ownerUi.password.value }); verifiedOwnerPassword = ownerUi.password.value; ownerPasswordVerified = true; ownerUi.grantOctober.classList.remove('hidden'); ownerResult('HASŁO POTWIERDZONE // PODAJ NICK GRACZA'); } catch (error) { ownerResult(error.message); } }
+async function setAccountRole(nick, role) { if (!isOwner()) return; if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; } try { const result = await ownerRequest('set-role', { ownerNick: currentUser, password: verifiedOwnerPassword, targetNick: nick, role }); const key = result.account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...result.account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); window.userRoles = window.userRoles || {}; window.userRoles[result.account.nick] = result.account.role; syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(getAccounts()[currentUser.toLowerCase()]?.role)); ownerResult(result.account.role === 'user' ? `USUNIĘTO ROLĘ: ${result.account.nick}` : `NADANO ROLĘ ${result.account.role}: ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
 async function grantOctoberWizard() { if (!isOwner() || !ownerPasswordVerified || !ownerTarget()) return; try { const result = await ownerRequest('grant-wizard', { ownerNick: currentUser, password: verifiedOwnerPassword, targetNick: ownerUi.target.value.trim() }); const key = result.account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...result.account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || []), 'october'])); saveMap('arcanaOwned', owned); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`PAŹDZIERNIK NADANY GRACZOWI ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
-function addAdmin() { if (!isOwner()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || key === OWNER_NICK.toLowerCase()) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } accounts[key].role = 'admin'; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); accountCharm(key); ownerResult(`DODANO ADMINA: ${accounts[key].nick}`); }
+async function resetRankedLadder() { if (!isOwner()) return; if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; } if (!confirm('Czy na pewno zresetować rangi wszystkich graczy? Misje dzienne i ranking miesiąca pozostaną bez zmian.')) return; try { const result = await ownerRequest('reset-ranking', { ownerNick: currentUser, password: verifiedOwnerPassword }); ownerResult(`ZRESETOWANO RANGI ${result.resetPlayers} GRACZY`); refreshCareer(); } catch (error) { ownerResult(error.message); } }
+function addAdmin() { if (!isOwner()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || key === OWNER_NICK.toLowerCase()) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } setAccountRole(accounts[key].nick, 'admin'); }
 function changeBan(banned) { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || (banned && OWNER_NICKS.includes(key))) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } const bans = getMap('arcanaBans'); if (banned) bans[key] = true; else delete bans[key]; saveMap('arcanaBans', bans); ownerResult(banned ? 'GRACZ ZBANOWANY' : `GRACZ ODBANOWANY: ${accounts[key].nick}`); }
 function giveCoins() { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); const amount = Number(ownerUi.coins.value); if (!accounts[key] || !Number.isFinite(amount) || amount < 1) { ownerResult('NIEPRAWIDŁOWY CEL LUB LICZBA'); return; } const added = Math.floor(amount); const balances = getMap('arcanaBalances'); balances[key] = Number(balances[key] || accounts[key].coins || 0) + added; accounts[key].coins = balances[key]; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = balances[key]; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`DODANO ${added} MONET GRACZOWI ${accounts[key].nick}`); }
 function takeCoins() { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); const amount = Number(ownerUi.coins.value); if (!accounts[key] || !Number.isFinite(amount) || amount < 1) { ownerResult('NIEPRAWIDŁOWY CEL LUB LICZBA'); return; } const balances = getMap('arcanaBalances'); const remaining = Math.max(0, Number(balances[key] ?? accounts[key].coins ?? 0) - Math.floor(amount)); balances[key] = remaining; accounts[key].coins = remaining; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = remaining; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`ODJĘTO MONETY GRACZOWI ${accounts[key].nick} // STAN ${remaining}`); }
@@ -301,7 +342,7 @@ function resetAccount() { if (!isOwner()) return; const key = ownerTarget(); con
 const originalResetAccount = resetAccount;
 resetAccount = function () { const key = ownerTarget(); const shouldClear = isOwner() && key !== OWNER_NICK.toLowerCase() && Boolean(getAccounts()[key]); originalResetAccount(); if (shouldClear) clearNewProgress(key); };
 function giveWizard() { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); const id = ownerUi.wizard.value; if (!accounts[key] || (id === 'overlord' && !isOwner())) { ownerResult('TYLKO WŁAŚCICIEL MOŻE NADAĆ WŁADCĘ'); return; } const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || accounts[key].wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${accounts[key].nick}`); }
-const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), bot: document.getElementById('botButton'), player: document.getElementById('playerButton'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
+const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
 const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONER', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 },
  october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
 const botProfiles = [
@@ -318,8 +359,6 @@ const modeSelectButton = document.getElementById('modeSelectButton');
 const modeOptions = document.getElementById('modeOptions');
 const playButton = document.getElementById('playButton');
 let selectedGameMode = 'bot', rankedSearchTimer = 0, rankedFallback = false, rankedGameActive = false;
-ui.bot = document.createElement('button');
-ui.player = document.createElement('button');
 const groupInviteUi = { modal: document.getElementById('groupInviteModal'), text: document.getElementById('groupInviteText'), accept: document.getElementById('acceptGroupInvite'), reject: document.getElementById('rejectGroupInvite'), status: document.getElementById('groupStatus') };
 let matchRoomKey = '';
 let matchSocket = null, onlineMatch = false, lastNetworkSync = 0;
@@ -333,14 +372,16 @@ const keys = {};
 const p1 = { x: 0, y: 0, hp: 100, maxHp: 100, mana: 100, damage: 12, spellCooldown: .3, abilityCooldown: 0, clones: 0, shield: 0, shieldUsed: false, invisible: false, invisibleTimer: 0, color: '#72e4d0', accent: '#d8fff2', face: 1, cooldown: 0 };
 const p2 = { x: 0, y: 0, hp: 100, maxHp: 100, mana: 100, damage: 12, damageReduction: 0, clones: [], color: '#ef7693', accent: '#ffe0e9', face: -1, cooldown: 0, teamId: 'bot-team', botSpeed: 1 };
 const remotePlayers = new Map();
+let reportedEliminations = new Set();
 let spells = [], particles = [], stars = [], cloneBodies = [];
 function resize() { const previousW = W, previousH = H; W = canvas.width = innerWidth * devicePixelRatio; H = canvas.height = innerHeight * devicePixelRatio; canvas.style.width = innerWidth + 'px'; canvas.style.height = innerHeight + 'px'; ctx.setTransform(devicePixelRatio, 0, 0, devicePixelRatio, 0, 0); W = innerWidth; H = innerHeight; if (previousW && previousH) { [p1, p2, ...cloneBodies, ...spells, ...particles].forEach(item => { if (Number.isFinite(item.x)) item.x *= W / previousW; if (Number.isFinite(item.y)) item.y *= H / previousH; if (Number.isFinite(item.vx)) item.vx *= W / previousW; if (Number.isFinite(item.vy)) item.vy *= H / previousH; }); } stars = Array.from({ length: 90 }, () => ({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 2, a: .25 + Math.random() * .65 })); }
-function createLocalBot(profile, teamId, index) { const wizard = wizards[profile.wizardId] || wizards.apprentice; return { nick: `BOT-${index + 1}`, wizardId: profile.wizardId, teamId, x: teamId === 'bot-team' ? W * (.73 + index * .06) : W * (.45 - index * .05), y: H * (.45 + index * .12), hp: wizard.hp, maxHp: wizard.hp, mana: 100, damage: wizard.damage, damageReduction: 0, clones: [], color: teamId === 'bot-team' ? '#ef7693' : '#ffb04b', accent: teamId === 'bot-team' ? '#ffe0e9' : '#fff0bd', face: teamId === 'bot-team' ? -1 : 1, cooldown: 0, botSpeed: 1 + profile.difficulty * .08 }; }
-function reset() { const wizard = wizards[selectedWizard]; const botWizard = wizards[activeBotProfile.wizardId] || wizards.apprentice; score = 0; spells = []; particles = []; cloneBodies = []; botPlayers = []; p1.stunTimer = 0; p1.knockbackTimer = 0; p1.x = W * .27; p1.y = H * .59; p1.maxHp = wizard.hp + getHealthBonus(wizard.hp); p1.hp = p1.maxHp; p1.mana = 100; p1.damage = wizard.damage; p1.damageReduction = getDamageReduction(); p1.spellCooldown = wizard.cooldown; p1.abilityCooldown = 0; p1.clones = 0; p1.cooldown = 0; p1.shield = 0; p1.shieldUsed = false; p1.invisible = false; p1.invisibleTimer = 0; p2.stunTimer = 0; p2.knockbackTimer = 0; p2.x = W * .73; p2.y = H * .59; p2.maxHp = botWizard.hp; p2.hp = p2.maxHp; p2.mana = 100; p2.damage = botWizard.damage; p2.damageReduction = botWizard.damageReduction || 0; p2.clones = []; p2.cooldown = 0; p2.teamId = 'bot-team'; p2.botSpeed = 1 + activeBotProfile.difficulty * .08; const botCount = mode === 'bot-one-two' ? 2 : mode === 'bot-one-three' ? 3 : mode === 'bot-two-two' ? 2 : 1; for (let index = 1; index < botCount; index++) botPlayers.push(createLocalBot(botProfiles[(activeBotProfile.difficulty + index) % botProfiles.length], 'bot-team', index)); if (mode === 'bot-two-two') botPlayers.push(createLocalBot(botProfiles[0], 'player-team', 0)); updateUI(); }
+function createLocalBot(profile, teamId, index) { const wizard = wizards[profile.wizardId] || wizards.apprentice; return { nick: `BOT-${index + 1}`, botId: teamId === 'bot-team' ? `bot-${index + 1}` : '', wizardId: profile.wizardId, teamId, x: teamId === 'bot-team' ? W * (.73 + index * .06) : W * (.45 - index * .05), y: H * (.45 + index * .12), hp: wizard.hp, maxHp: wizard.hp, mana: 100, damage: wizard.damage, damageReduction: 0, clones: [], color: teamId === 'bot-team' ? '#ef7693' : '#ffb04b', accent: teamId === 'bot-team' ? '#ffe0e9' : '#fff0bd', face: teamId === 'bot-team' ? -1 : 1, cooldown: 0, botSpeed: 1 + profile.difficulty * .08 }; }
+function reset() { const wizard = wizards[selectedWizard]; const botWizard = wizards[activeBotProfile.wizardId] || wizards.apprentice; score = 0; spells = []; particles = []; cloneBodies = []; botPlayers = []; reportedEliminations = new Set(); p1.stunTimer = 0; p1.knockbackTimer = 0; p1.x = W * .27; p1.y = H * .59; p1.maxHp = wizard.hp + getHealthBonus(wizard.hp); p1.hp = p1.maxHp; p1.mana = 100; p1.damage = wizard.damage; p1.damageReduction = getDamageReduction(); p1.spellCooldown = wizard.cooldown; p1.abilityCooldown = 0; p1.clones = 0; p1.cooldown = 0; p1.shield = 0; p1.shieldUsed = false; p1.invisible = false; p1.invisibleTimer = 0; p2.stunTimer = 0; p2.knockbackTimer = 0; p2.x = W * .73; p2.y = H * .59; p2.maxHp = botWizard.hp; p2.hp = p2.maxHp; p2.mana = 100; p2.damage = botWizard.damage; p2.damageReduction = botWizard.damageReduction || 0; p2.clones = []; p2.cooldown = 0; p2.teamId = 'bot-team'; p2.botId = 'bot-1'; p2.botSpeed = 1 + activeBotProfile.difficulty * .08; const botCount = mode === 'bot-one-two' ? 2 : mode === 'bot-one-three' ? 3 : mode === 'bot-two-two' ? 2 : 1; for (let index = 1; index < botCount; index++) botPlayers.push(createLocalBot(botProfiles[(activeBotProfile.difficulty + index) % botProfiles.length], 'bot-team', index)); if (mode === 'bot-two-two') botPlayers.push(createLocalBot(botProfiles[0], 'player-team', 0)); updateUI(); }
 const resetForMode = reset;
 reset = function () { resetForMode(); if (mode === 'preview') { p2.maxHp = 100; p2.hp = 100; p2.stunTimer = Infinity; botPlayers = []; updateUI(); } };
 function getMatchCode() { return matchCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 function sendNetwork(message) { if (matchSocket?.readyState === WebSocket.OPEN) matchSocket.send(JSON.stringify(message)); }
+function recordElimination(target) { if (reportedEliminations.has(target)) return; reportedEliminations.add(target); if (onlineMatch && target.nick) sendNetwork({ type: 'kill', targetNick: target.nick }); else if (mode.startsWith('bot') && target.teamId === 'bot-team' && target.botId) sendNetwork({ type: 'career-bot-kill', targetId: target.botId }); }
 function leaveMatchConnection() { if (matchSocket) { sendNetwork({ type: randomQueued ? 'queue-cancel' : 'leave-room' }); matchSocket.close(); matchSocket = null; } randomQueued = false; onlineMatch = false; joined = false; running = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); updateDeviceControls(); }
 function handleNetworkMessage(message) { if (message.type === 'waiting') { ui.join.textContent = `CZEKANIE NA GRACZA // KOD ${message.code}`; return; } if (message.type === 'matched') { onlineMatch = true; joined = true; opponentProfile = message.opponent || {}; mode = 'player'; matchRewardGranted = false; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; if (!running) startGame('player'); return; } if (message.type === 'state') { p2.x = (1 - message.x) * W; p2.y = message.y * H; p2.hp = message.hp; p2.maxHp = message.maxHp || 100; p2.mana = message.mana; p2.invisible = message.invisible; p2.damageReduction = message.damageReduction || 0; p2.reflectShield = message.reflectShield || 0; p2.clones = (message.clones || []).map(clone => ({ x: (1 - clone.x) * W, y: clone.y * H, slot: clone.slot })); return; } if (message.type === 'spell') { const spell = message.spell; if (p1.reflectShield > 0) { const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x); const reflected = { ...spell, x: p1.x, y: p1.y, vx: Math.cos(angle) * 520, vy: Math.sin(angle) * 520, life: 1.5, owner: p1 }; spells.push(reflected); sendNetwork({ type: 'reflect', id: spell.id, reflector: currentUser, spell: { ...reflected, x: reflected.x / W, y: reflected.y / H, vx: reflected.vx / W, vy: reflected.vy / H } }); return; } spells.push({ ...spell, x: (1 - spell.x) * W, y: spell.y * H, vx: -spell.vx * W, vy: spell.vy * H, owner: p2 }); return; } if (message.type === 'reflect') { spells.forEach(spell => { if (spell.id === message.id) spell.life = 0; }); const spell = message.spell; spells.push({ ...spell, x: (1 - spell.x) * W, y: spell.y * H, vx: -spell.vx * W, vy: spell.vy * H, owner: message.reflector?.toLowerCase() === currentUser.toLowerCase() ? p1 : p2 }); return; } if (message.type === 'damage') { p1.hp -= message.amount; if (p1.hp <= 0) endGame('GRACZ 2'); return; } if (message.type === 'round-ended') { const won = message.winnerNick?.toLowerCase() === currentUser.toLowerCase(); if (won && !matchRewardGranted && opponentProfile.dropEnabled && keychains[opponentProfile.dropCharm]) { grantKeychain(opponentProfile.dropCharm); matchRewardGranted = true; setToast(`ZDOBYWASZ BRELOCZEK: ${keychains[opponentProfile.dropCharm].name}`); } if (running && !won) { coins = Math.max(0, coins - 50); persistCoins(); ui.result.textContent = 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden'); ui.result.classList.add('loss'); } onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'RUNDA ZAKOŃCZONA // DOŁĄCZ PONOWNIE KODEM'; updateDeviceControls(); if (matchSocket) matchSocket.close(); return; } if (message.type === 'opponent-left') { onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'PRZECIWNIK OPUŚCIŁ GRĘ'; updateDeviceControls(); setToast('PRZECIWNIK OPUŚCIŁ GRĘ'); } }
 function connectMatchSocket(onReady = () => {}) { if (matchSocket?.readyState === WebSocket.OPEN) { onReady(); return; } if (matchSocket?.readyState === WebSocket.CONNECTING) { matchSocket.addEventListener('open', onReady, { once: true }); return; } const protocol = location.protocol === 'https:' ? 'wss' : 'ws'; matchSocket = new WebSocket(`${protocol}://${location.host}`); matchSocket.addEventListener('open', () => { sendNetwork({ type: 'hello', nick: currentUser, profile: getProfileDrop() }); onReady(); }); matchSocket.addEventListener('message', event => { try { handleNetworkMessageV2(JSON.parse(event.data)); } catch { setToast('BŁĄD DANYCH POŁĄCZENIA'); } }); matchSocket.addEventListener('close', () => { matchSocket = null; randomQueued = false; if (onlineMatch) { onlineMatch = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'POŁĄCZENIE ZERWANE'; } }); }
@@ -353,9 +394,9 @@ function startGame(selectedMode) { mode = selectedMode; if (mode === 'player' &&
 const originalStartGame = startGame;
 startGame = function (selectedMode) { matchWinRecorded = false; originalStartGame(selectedMode); if (ui.reveal.classList.contains('hidden')) return; const rival = mode.startsWith('bot') ? { nick: 'BOT', wizardId: activeBotProfile.wizardId, title: '' } : opponentProfile; document.getElementById('matchPlayerWizard').textContent = wizards[selectedWizard].name; document.getElementById('matchPlayerNick').textContent = currentUser || 'GRACZ'; document.getElementById('matchPlayerTitle').textContent = getCurrentTitle(); document.getElementById('matchRivalWizard').textContent = wizards[rival.wizardId]?.name || 'ISKRA'; document.getElementById('matchRivalNick').textContent = rival.nick || 'PRZECIWNIK'; document.getElementById('matchRivalTitle').textContent = rival.title || ''; };
 const startGameWithPreviewLabel = startGame;
-startGame = function (selectedMode) { startGameWithPreviewLabel(selectedMode); if (selectedMode === 'preview' && !ui.reveal.classList.contains('hidden')) { document.getElementById('matchRivalWizard').textContent = 'BOT'; document.getElementById('matchRivalNick').textContent = '100 HP // NIE ATAKUJE'; } };
+startGame = function (selectedMode) { startGameWithPreviewLabel(selectedMode); if (selectedMode.startsWith('bot') && currentUser) connectMatchSocket(() => sendNetwork({ type: 'bot-match-start', mode: selectedMode })); if (selectedMode === 'preview' && !ui.reveal.classList.contains('hidden')) { document.getElementById('matchRivalWizard').textContent = 'BOT'; document.getElementById('matchRivalNick').textContent = '100 HP // NIE ATAKUJE'; } };
 const originalEndGame = endGame;
-endGame = function (winner) { const wasRunning = running; const wasOnline = onlineMatch; const wasRanked = rankedGameActive; originalEndGame(winner); if (wasRunning && winner === 'GRACZ 1') recordWizardWin(); if (wasRunning && wasRanked && !wasOnline) connectMatchSocket(() => sendNetwork({ type: 'ranked-bot-result', won: winner === 'GRACZ 1' })); if (wasRunning && !wasRanked) rankedGameActive = false; };
+endGame = function (winner) { const wasRunning = running; const wasOnline = onlineMatch; const wasRanked = rankedGameActive; if (wasRunning && mode.startsWith('bot')) sendNetwork({ type: 'bot-match-end' }); originalEndGame(winner); if (wasRunning && winner === 'GRACZ 1') recordWizardWin(); if (wasRunning && wasRanked && !wasOnline) connectMatchSocket(() => sendNetwork({ type: 'ranked-bot-result', won: winner === 'GRACZ 1' })); if (wasRunning && !wasRanked) rankedGameActive = false; };
 function joinPlayer() { if (mode === 'player' && !joined) { joined = true; ui.join.textContent = 'GRACZ 2 DOLACZYL // NACISNIJ ENTER'; setToast('GRACZ 2 DOLACZYL'); } }
 function endGame(winner) { if (!running) return; running = false; const wasOnline = onlineMatch; const playerWon = winner === 'GRACZ 1'; if (wasOnline && playerWon) sendNetwork({ type: 'game-over', winnerNick: currentUser, winnerTeamId: teamId }); if (wasOnline) { onlineMatch = false; joined = false; } const reward = mode.startsWith('bot') ? activeBotProfile.reward : 100; if (playerWon) { coins += reward; persistCoins(); setToast(`+${reward} MONET ZA ZWYCIĘSTWO`); } else { coins = Math.max(0, coins - 50); persistCoins(); setToast('-50 MONET ZA PRZEGRANĄ'); } ui.result.textContent = playerWon ? 'WYGRAŁEŚ!' : 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden'); ui.result.classList.toggle('win', playerWon); ui.start.classList.remove('hidden'); ui.join.textContent = wasOnline ? 'RUNDA ZAKOŃCZONA // WPISZ KOD, ABY DOŁĄCZYĆ PONOWNIE' : `${winner} WYGRYWA // NAGRODA ${playerWon ? reward : 0} MONET`; ui.status.textContent = 'DUEL COMPLETE'; updateDeviceControls(); updateShop(); }
 const finishGameWithPreview = endGame;
@@ -374,11 +415,13 @@ function cast(owner, target, color) {
     if (Math.hypot(target.x - owner.x, target.y - owner.y) > 92) return;
     owner.cooldown = p1.spellCooldown;
     const damage = 15 * (1 - (target === p2 ? (p2.damageReduction || 0) : getDamageReduction()));
+    const targetWasAlive = target.hp > 0;
     target.hp -= damage;
     if (target.nick && remotePlayers.has(target.nick.toLowerCase())) remotePlayers.get(target.nick.toLowerCase()).hp = target.hp;
     if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage });
+    if (targetWasAlive && target.hp <= 0) recordElimination(target);
     burst(target.x, target.y, '#e8c49a', 10);
-    if (target.hp <= 0 && !onlineMatch) endGame('GRACZ 1');
+    if (target.hp <= 0 && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
     setToast('HERKULES // CIOS PIĘŚCIĄ');
     return;
   }
@@ -461,11 +504,13 @@ function useAbility() {
     }
     const rawDamage = p2.maxHp * wizard.abilityDamage;
     const damage = rawDamage * (1 - (p2.damageReduction || 0));
+    const targetWasAlive = p2.hp > 0;
     p2.hp -= damage;
     if (p2.nick && remotePlayers.has(p2.nick.toLowerCase())) remotePlayers.get(p2.nick.toLowerCase()).hp = p2.hp;
     if (onlineMatch && p2.nick) sendNetwork({ type: 'damage', targetNick: p2.nick, amount: damage });
+    if (targetWasAlive && p2.hp <= 0) recordElimination(p2);
     burst(p2.x, p2.y, wizard.abilityType === 'sword' ? '#e9e4d5' : '#ffe56b', 16);
-    if (p2.hp <= 0) endGame('GRACZ 1');
+    if (p2.hp <= 0 && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
     setToast(wizard.abilityType === 'sword' ? 'RYCERZ // CIOS MIECZEM' : 'PIORUN // UDERZENIE');
   }
 }
@@ -515,8 +560,10 @@ function update(dt) {
       const target = getHostileTargets().find(player => player.hp > 0 && Math.hypot(spell.x - player.x, spell.y - player.y) < 36);
       if (!target) return;
       const damage = spell.damage * (1 - (target.damageReduction || 0));
+      const targetWasAlive = target.hp > 0;
       target.hp -= damage;
       if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage });
+      if (targetWasAlive && target.hp <= 0) recordElimination(target);
       burst(target.x, target.y, spell.color, 12); spell.life = 0;
       if (p2.nick === target.nick) p2.hp = target.hp;
       if (onlineMatch && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
@@ -690,6 +737,7 @@ document.getElementById('touchCast').addEventListener('pointercancel', () => { k
 document.getElementById('touchAbility').addEventListener('pointerdown', event => { event.preventDefault(); useAbility(); });
 profileUi.button.addEventListener('click', openProfile);
 profileUi.close.addEventListener('click', () => profileUi.modal.classList.add('hidden'));
+document.getElementById('openRankingsButton').addEventListener('click', () => window.openRanking());
 profileUi.clear.addEventListener('click', () => profileUi.editor.getContext('2d').clearRect(0, 0, profileUi.editor.width, profileUi.editor.height));
 profileUi.save.addEventListener('click', saveAvatar);
 profileUi.dropEnabled.addEventListener('change', () => { const map = getMap('arcanaDropEnabled'); map[currentUser.toLowerCase()] = profileUi.dropEnabled.checked; saveMap('arcanaDropEnabled', map); syncProfileToServer(); });
@@ -734,8 +782,8 @@ ownerUi.resetAccount.addEventListener('click', resetAccount);
 ownerUi.password.addEventListener('input', () => { ownerPasswordVerified = false; verifiedOwnerPassword = ''; ownerUi.grantOctober.classList.add('hidden'); });
 ownerUi.verifyPassword.addEventListener('click', verifyOwnerPassword);
 ownerUi.grantOctober.addEventListener('click', grantOctoberWizard);
-function startBotMode() { leaveMatchConnection(); startGame('bot'); }
-addEventListener('resize', resize); addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.bot.addEventListener('click', startBotMode); ui.player.addEventListener('click', () => startCodeMatch()); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); resize(); reset(); updateShop(); requestAnimationFrame(frame);
+ownerUi.resetRanking.addEventListener('click', resetRankedLadder);
+addEventListener('resize', resize); addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); resize(); reset(); updateShop(); requestAnimationFrame(frame);
 auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth.loginTab.addEventListener('click', () => showAuthForm('login')); auth.registerForm.addEventListener('submit', registerAccount); auth.loginForm.addEventListener('submit', loginAccount); ui.logout.addEventListener('click', logoutAccount); ownerUi.toggle.addEventListener('click', () => toggleOwnerPanel()); ownerUi.addAdmin.addEventListener('click', addAdmin); ownerUi.ban.addEventListener('click', () => changeBan(true)); ownerUi.unban.addEventListener('click', () => changeBan(false)); ownerUi.giveCoins.addEventListener('click', giveCoins); ownerUi.giveWizard.addEventListener('click', giveWizard); ui.friendsButton.addEventListener('click', () => { setFriendsTab('friends'); ui.friendsModal.classList.remove('hidden'); ui.inviteMessage.textContent = ''; updateFriends(); }); ui.friendsTab.addEventListener('click', () => setFriendsTab('friends')); ui.requestsTab.addEventListener('click', () => setFriendsTab('requests')); ui.suggestionsTab.addEventListener('click', () => setFriendsTab('suggestions')); ui.friendsClose.addEventListener('click', () => ui.friendsModal.classList.add('hidden')); ui.sendInvite.addEventListener('click', sendFriendInvite); ui.suggestionsList.addEventListener('click', event => { const accept = event.target.closest('[data-accept]'); const reject = event.target.closest('[data-reject]'); if (accept) respondToFriendInvite(decodeURIComponent(accept.dataset.accept), true); if (reject) respondToFriendInvite(decodeURIComponent(reject.dataset.reject), false); }); addEventListener('beforeunload', applyInactivePenalty); addEventListener('pagehide', event => { if (!event.persisted) applyInactivePenalty(); }); ensureOwnerAccount(); showAuthForm('register');
 // === ARCANNA GLOBAL PATCH: OWNER, FRIENDS, TRADE ===
 // Ten blok możesz wkleić pod całym game.js. Nadpisuje stare funkcje.
@@ -975,169 +1023,96 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
 })();
 
-// === ARCANNA RANKING MODULE: TOP 10 / TOP 20 KILLS / TOP 10 WINS ===
-// Wklej NA SAMYM DOLE game.js
-
+// === RANKINGI ===
 (function () {
-
-  // Tworzymy okno rankingu jeśli go nie ma
-  let rankingModal = document.getElementById('rankingModal');
-  if (!rankingModal) {
-    rankingModal = document.createElement('div');
-    rankingModal.id = 'rankingModal';
-    rankingModal.className = 'friends-modal'; // używamy stylu modalnego
-    rankingModal.innerHTML = `
-      <div class="friends-window" style="max-width:480px;">
-        <h3>RANKING</h3>
-
-        <div class="friends-tabs" id="rankingTabs">
-          <button data-mode="ranked" class="active">TOP 10 RANKED</button>
-          <button data-mode="kills">TOP 20 KILLE</button>
-          <button data-mode="wins">TOP 10 WYGRANE</button>
+  const rankingModal = document.createElement('section');
+  rankingModal.id = 'rankingModal';
+  rankingModal.className = 'ranking-modal hidden';
+  rankingModal.setAttribute('role', 'dialog');
+  rankingModal.setAttribute('aria-modal', 'true');
+  rankingModal.setAttribute('aria-labelledby', 'rankingTitle');
+  rankingModal.innerHTML = `
+    <div class="ranking-window">
+      <div class="ranking-heading">
+        <div>
+          <div class="eyebrow">ARCANE COUNCIL / TOP GRACZY</div>
+          <h2 id="rankingTitle">TOP 10 RANKED</h2>
         </div>
-
-        <div id="rankingList" class="friends-list"></div>
-
-        <button id="rankingClose" style="margin-top:12px;">ZAMKNIJ</button>
+        <button id="rankingCloseTop" class="shop-close" type="button" aria-label="Zamknij ranking">X</button>
       </div>
-    `;
-    document.body.appendChild(rankingModal);
-  }
+      <div id="rankingList" class="ranking-list" aria-live="polite"></div>
+      <div class="ranking-actions">
+        <button type="button" data-ranking-mode="ranked" class="active">TOP 10 RANKED</button>
+        <button type="button" data-ranking-mode="kills">TOP 20 KILLE</button>
+        <button type="button" data-ranking-mode="wins">TOP 10 WYGRANE</button>
+        <button id="rankingClose" type="button">ZAMKNIJ</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(rankingModal);
 
-  const rankingTabs = rankingModal.querySelector('#rankingTabs');
+  const rankingTitle = rankingModal.querySelector('#rankingTitle');
   const rankingList = rankingModal.querySelector('#rankingList');
-  const rankingClose = rankingModal.querySelector('#rankingClose');
+  const rankingActions = rankingModal.querySelector('.ranking-actions');
+  const modeTitles = { ranked: 'TOP 10 RANKED', kills: 'TOP 20 KILLE', wins: 'TOP 10 WYGRANE' };
 
-  rankingClose.onclick = () => {
-    rankingModal.classList.add('hidden');
-  };
-
-  // Funkcja pobierająca ranking z serwera
   function fetchRanking(mode) {
-    fetch('/api/ranking/' + mode)
-      .then(res => res.json())
-      .then(data => {
-        renderRanking(data, mode);
+    rankingTitle.textContent = modeTitles[mode];
+    rankingList.innerHTML = '<div class="ranking-empty">ŁADOWANIE RANKINGU...</div>';
+    fetch(`/api/ranking/${mode}`)
+      .then(response => {
+        if (!response.ok) throw new Error('Nie udało się pobrać rankingu.');
+        return response.json();
+      })
+      .then(players => {
+        rankingList.replaceChildren();
+        if (!Array.isArray(players) || players.length === 0) {
+          rankingList.innerHTML = '<div class="ranking-empty">BRAK DANYCH</div>';
+          return;
+        }
+        players.forEach((player, index) => {
+          const row = document.createElement('div');
+          row.className = 'ranking-row';
+          const place = document.createElement('strong');
+          place.className = 'ranking-place';
+          place.textContent = String(index + 1).padStart(2, '0');
+          const nick = document.createElement('span');
+          nick.className = 'ranking-nick';
+          nick.textContent = player.nick || 'GRACZ';
+          const value = document.createElement('strong');
+          value.className = 'ranking-value';
+          value.textContent = mode === 'ranked' ? `${Number(player.rankPoints) || 0} RP` : mode === 'kills' ? `${Number(player.kills) || 0} KILLI` : `${Number(player.wins) || 0} WYGRANYCH`;
+          row.append(place, nick, value);
+          rankingList.appendChild(row);
+        });
       })
       .catch(() => {
-        rankingList.innerHTML = `<div class="friends-empty">BŁĄD ŁADOWANIA RANKINGU</div>`;
+        rankingList.innerHTML = '<div class="ranking-empty">NIE UDAŁO SIĘ ZAŁADOWAĆ RANKINGU</div>';
       });
   }
 
-  // Renderowanie tabeli
-  function renderRanking(data, mode) {
-    rankingList.innerHTML = '';
-
-    if (!Array.isArray(data) || data.length === 0) {
-      rankingList.innerHTML = `<div class="friends-empty">BRAK DANYCH</div>`;
-      return;
-    }
-
-    data.forEach((player, index) => {
-      const row = document.createElement('div');
-      row.className = 'friend-item';
-      row.innerHTML = `
-        <span><strong>${index + 1}.</strong> ${player.nick}</span>
-        <span>
-          ${
-            mode === 'ranked'
-              ? `RP: ${player.rankPoints}`
-              : mode === 'kills'
-              ? `KILLE: ${player.kills}`
-              : `WYGRANE: ${player.wins}`
-          }
-        </span>
-      `;
-      rankingList.appendChild(row);
-    });
+  function closeRanking() {
+    rankingModal.classList.add('hidden');
   }
 
-  // Obsługa przełączania zakładek
-  rankingTabs.addEventListener('click', (e) => {
-    if (e.target.tagName !== 'BUTTON') return;
-
-    rankingTabs.querySelectorAll('button').forEach(btn => btn.classList.remove('active'));
-    e.target.classList.add('active');
-
-    const mode = e.target.dataset.mode;
-    fetchRanking(mode);
+  rankingActions.addEventListener('click', event => {
+    const button = event.target.closest('[data-ranking-mode]');
+    if (button) {
+      rankingActions.querySelectorAll('[data-ranking-mode]').forEach(item => item.classList.toggle('active', item === button));
+      fetchRanking(button.dataset.rankingMode);
+    }
+    if (event.target.closest('#rankingClose')) closeRanking();
+  });
+  rankingModal.querySelector('#rankingCloseTop').addEventListener('click', closeRanking);
+  rankingModal.addEventListener('click', event => {
+    if (event.target === rankingModal) closeRanking();
   });
 
-  // Funkcja otwierająca ranking
   window.openRanking = function () {
+    profileUi.modal.classList.add('hidden');
     rankingModal.classList.remove('hidden');
-    fetchRanking('ranked'); // domyślnie ranking
+    fetchRanking('ranked');
   };
-
-})();
-// === ARCANNA RANKING MODULE: TOP 20 KILLS ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // Tworzymy okno rankingu jeśli go nie ma
-  let killsModal = document.getElementById('killsModal');
-  if (!killsModal) {
-    killsModal = document.createElement('div');
-    killsModal.id = 'killsModal';
-    killsModal.className = 'friends-modal'; // używamy stylu modalnego
-    killsModal.innerHTML = `
-      <div class="friends-window" style="max-width:480px;">
-        <h3>TOP 20 KILLE</h3>
-
-        <div id="killsList" class="friends-list"></div>
-
-        <button id="killsClose" style="margin-top:12px;">ZAMKNIJ</button>
-      </div>
-    `;
-    document.body.appendChild(killsModal);
-  }
-
-  const killsList = killsModal.querySelector('#killsList');
-  const killsClose = killsModal.querySelector('#killsClose');
-
-  killsClose.onclick = () => {
-    killsModal.classList.add('hidden');
-  };
-
-  // Pobieranie danych z serwera
-  function fetchKillsRanking() {
-    fetch('/api/ranking/kills')
-      .then(res => res.json())
-      .then(data => {
-        renderKillsRanking(data);
-      })
-      .catch(() => {
-        killsList.innerHTML = `<div class="friends-empty">BŁĄD ŁADOWANIA RANKINGU</div>`;
-      });
-  }
-
-  // Renderowanie tabeli
-  function renderKillsRanking(data) {
-    killsList.innerHTML = '';
-
-    if (!Array.isArray(data) || data.length === 0) {
-      killsList.innerHTML = `<div class="friends-empty">BRAK DANYCH</div>`;
-      return;
-    }
-
-    data.forEach((player, index) => {
-      const row = document.createElement('div');
-      row.className = 'friend-item';
-      row.innerHTML = `
-        <span><strong>${index + 1}.</strong> ${player.nick}</span>
-        <span>KILLE: ${player.kills}</span>
-      `;
-      killsList.appendChild(row);
-    });
-  }
-
-  // Funkcja otwierająca ranking killów
-  window.openKillsRanking = function () {
-    killsModal.classList.remove('hidden');
-    fetchKillsRanking();
-  };
-
 })();
 // === ARCANNA SHOP MODULE: POSTACIE / BRELOCZKI / KAPELUSZE ===
 // Wklej NA SAMYM DOLE game.js
@@ -1741,15 +1716,17 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 (function () {
 
   // ============================================================
-  // 1. PRZYCISK ZGŁOŚ W LEWYM GÓRNYM ROGU
+  // 1. POJEDYNCZY PRZYCISK ZGŁOSZENIA W PRAWYM DOLNYM ROGU
   // ============================================================
 
   const reportBtn = document.createElement('button');
+  reportBtn.id = 'reportBtn';
+  reportBtn.classList.add('hidden');
   reportBtn.textContent = "ZGŁOŚ";
   reportBtn.style.position = "fixed";
-  reportBtn.style.left = "10px";
-  reportBtn.style.top = "10px";
-  reportBtn.style.zIndex = "9999";
+  reportBtn.style.right = "18px";
+  reportBtn.style.bottom = "18px";
+  reportBtn.style.zIndex = "8";
   reportBtn.style.padding = "8px 14px";
   reportBtn.style.background = "#c62828";
   reportBtn.style.color = "#fff";
@@ -1786,14 +1763,12 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       return;
     }
 
-    sendNetwork({
-      type: "report",
-      from: currentUser,
-      target: nick,
-      text
-    });
-
-    reportModal.querySelector("#reportMsg").textContent = "Zgłoszenie wysłane!";
+    if (!currentUser || typeof window.sendReportToAdmins !== 'function') {
+      reportModal.querySelector("#reportMsg").textContent = "ZALOGUJ SIĘ, ABY WYSŁAĆ ZGŁOSZENIE";
+      return;
+    }
+    window.sendReportToAdmins(currentUser, nick, text);
+    reportModal.querySelector("#reportMsg").textContent = "ZGŁOSZENIE ZAPISANE";
   };
 
   // ============================================================
@@ -2103,7 +2078,19 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const OWNER = "adam"; // właściciel gry
 
   if (!window.userRoles) window.userRoles = {}; 
-  if (!window.reports) window.reports = [];     
+  if (!window.reports) {
+    const storedReports = localStorage.getItem('arcanaReports');
+    if (!storedReports) window.reports = [];
+    else {
+      try {
+        const parsedReports = JSON.parse(storedReports);
+        window.reports = Array.isArray(parsedReports) ? parsedReports : [];
+      } catch (error) {
+        console.error('Nie można odczytać zapisanych zgłoszeń.', error);
+        window.reports = [];
+      }
+    }
+  }
   if (!window.suspended) window.suspended = {}; 
 
   // ============================================================
@@ -2111,13 +2098,12 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   // ============================================================
 
   window.setRole = function (nick, role) {
-    if (currentUser !== OWNER) return;
-    userRoles[nick] = role;
+    if (currentUser.toLowerCase() !== OWNER.toLowerCase()) return;
+    return setAccountRole(nick, role);
   };
 
   window.removeRole = function (nick) {
-    if (currentUser !== OWNER) return;
-    delete userRoles[nick];
+    return window.setRole(nick, 'user');
   };
 
   // ============================================================
@@ -2181,11 +2167,12 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
   window.sendReportToAdmins = function (from, target, text) {
     reports.push({
-      from,
-      target,
-      text,
+      from: String(from).slice(0, 16),
+      target: String(target).trim().slice(0, 16),
+      text: String(text).trim().slice(0, 1000),
       time: new Date().toLocaleString("pl-PL")
     });
+    localStorage.setItem('arcanaReports', JSON.stringify(reports));
   };
 
   // ============================================================
@@ -2235,6 +2222,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   adminBtn.style.cursor = "pointer";
 
   document.body.appendChild(adminBtn);
+  adminBtn.classList.add('hidden');
 
   adminBtn.onclick = () => {
     const role = userRoles[currentUser];
@@ -2266,11 +2254,13 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     reports.forEach((r, i) => {
       const row = document.createElement("div");
       row.className = "friend-item";
-      row.innerHTML = `
-        <span><strong>${i + 1}.</strong> ${r.from} → ${r.target}</span>
-        <span>${r.text}</span>
-        <span>${r.time}</span>
-      `;
+      const summary = document.createElement('span');
+      summary.textContent = `${i + 1}. ${r.from} → ${r.target}`;
+      const description = document.createElement('span');
+      description.textContent = r.text;
+      const timestamp = document.createElement('span');
+      timestamp.textContent = r.time;
+      row.append(summary, description, timestamp);
       list.appendChild(row);
     });
   }
@@ -2409,6 +2399,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   halfBtn.style.cursor = "pointer";
 
   document.body.appendChild(halfBtn);
+  halfBtn.classList.add('hidden');
 
   halfBtn.onclick = () => {
     const role = userRoles[currentUser];
@@ -2556,7 +2547,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   }
 
   setInterval(() => {
-    if (!playerData[currentUser].vip) return;
+    if (!window.playerData?.[currentUser]?.vip) return;
 
     const last = localStorage.getItem("vipDaily_" + currentUser);
 
@@ -2572,7 +2563,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   // ============================================================
 
   window.applyMoneyMultiplier = function (amount) {
-    if (playerData[currentUser].vip) {
+    if (window.playerData?.[currentUser]?.vip) {
       return Math.floor(amount * 1.25);
     }
     return amount;
@@ -2683,7 +2674,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   }
 
   setInterval(() => {
-    if (!playerData[currentUser].svip) return;
+    if (!window.playerData?.[currentUser]?.svip) return;
 
     const last = localStorage.getItem("svipDaily_" + currentUser);
 
@@ -2701,7 +2692,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const oldMultiplier = window.applyMoneyMultiplier;
 
   window.applyMoneyMultiplier = function (amount) {
-    if (playerData[currentUser].svip) {
+    if (window.playerData?.[currentUser]?.svip) {
       return Math.floor(amount * 1.5);
     }
     return oldMultiplier(amount);
@@ -2812,7 +2803,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   }
 
   setInterval(() => {
-    if (!playerData[currentUser].gvip) return;
+    if (!window.playerData?.[currentUser]?.gvip) return;
 
     const last = localStorage.getItem("gvipDaily_" + currentUser);
 
@@ -2830,7 +2821,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const oldMultiplier = window.applyMoneyMultiplier;
 
   window.applyMoneyMultiplier = function (amount) {
-    if (playerData[currentUser].gvip) {
+    if (window.playerData?.[currentUser]?.gvip) {
       return Math.floor(amount * 1.75);
     }
     return oldMultiplier(amount);
@@ -2925,7 +2916,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   }
 
   setInterval(() => {
-    if (!playerData[currentUser].premium) return;
+    if (!window.playerData?.[currentUser]?.premium) return;
 
     const last = localStorage.getItem("premiumDaily_" + currentUser);
 
@@ -2939,7 +2930,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const oldMultiplier = window.applyMoneyMultiplier;
 
   window.applyMoneyMultiplier = function (amount) {
-    if (playerData[currentUser].premium) {
+    if (window.playerData?.[currentUser]?.premium) {
       return Math.floor(amount * 2.0);
     }
     return oldMultiplier(amount);
@@ -3089,1591 +3080,3 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
 
 })();
-// === ARCANNA ADMIN PANEL (NO RESET / NO PASSWORD CHECK) ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  const adminPanel = document.createElement('div');
-  adminPanel.className = "friends-modal hidden";
-  adminPanel.innerHTML = `
-    <div class="friends-window" style="max-width:480px;">
-      <h3>ADMIN // PANEL</h3>
-
-      <label>Nick gracza</label>
-      <input id="adminNick" placeholder="Nick gracza">
-
-      <label>Monety</label>
-      <input id="adminCoins" type="number" placeholder="0">
-
-      <label>Czarodziej</label>
-      <select id="adminMage">
-        <option value="burzowy">Burzowy</option>
-        <option value="elektryczny">Elektryczny</option>
-        <option value="iluzjonista">Iluzjonista</option>
-        <option value="piorun">Piorun</option>
-        <option value="wladca_orlow">Władca Orłów</option>
-      </select>
-
-      <button id="adminBan">ZABANUJ</button>
-      <button id="adminUnban">ODBANUJ</button>
-      <button id="adminGiveCoins">DAJ MONETY</button>
-      <button id="adminTakeCoins">ODEJMIJ</button>
-      <button id="adminGiveMage">DAJ CZARODZIEJA</button>
-
-      <button id="adminClose" class="collapse-btn">ZWIŃ</button>
-    </div>
-  `;
-  document.body.appendChild(adminPanel);
-
-  // Przycisk otwierania panelu admina
-  const adminBtn = document.createElement('button');
-  adminBtn.textContent = "ADMIN PANEL";
-  adminBtn.className = "admin-open-btn";
-  document.body.appendChild(adminBtn);
-
-  adminBtn.onclick = () => {
-    if (userRoles[currentUser] !== "admin") return;
-    adminPanel.classList.remove("hidden");
-  };
-
-  adminPanel.querySelector("#adminClose").onclick = () =>
-    adminPanel.classList.add("hidden");
-
-})();
-// === ARCANNA HALF-ADMIN PANEL (LIMITED FUNCTIONS) ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  const halfPanel = document.createElement('div');
-  halfPanel.className = "friends-modal hidden";
-  halfPanel.innerHTML = `
-    <div class="friends-window" style="max-width:480px;">
-      <h3>PÓŁ-ADMIN // PANEL</h3>
-
-      <label>Nick gracza</label>
-      <input id="halfNick" placeholder="Nick gracza">
-
-      <button id="halfBan">ZABANUJ</button>
-
-      <label>Zgłoszenie</label>
-      <textarea id="halfReport" placeholder="Co się stało?" rows="3"></textarea>
-      <button id="halfSendReport">WYŚLIJ ZGŁOSZENIE</button>
-
-      <button id="halfClose" class="collapse-btn">ZWIŃ</button>
-    </div>
-  `;
-  document.body.appendChild(halfPanel);
-
-  const halfBtn = document.createElement('button');
-  halfBtn.textContent = "PÓŁ-ADMIN PANEL";
-  halfBtn.className = "admin-open-btn";
-  document.body.appendChild(halfBtn);
-
-  halfBtn.onclick = () => {
-    if (userRoles[currentUser] !== "half-admin") return;
-    halfPanel.classList.remove("hidden");
-  };
-
-  halfPanel.querySelector("#halfClose").onclick = () =>
-    halfPanel.classList.add("hidden");
-
-})();
-// === ARCANNA REPORT BUTTON (BOTTOM RIGHT) ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  if (!window.reports) window.reports = [];
-
-  // ============================================================
-  // PRZYCISK ZGŁOŚ — PRAWY DOLNY RÓG
-  // ============================================================
-
-  const reportBtn = document.createElement('button');
-  reportBtn.textContent = "ZGŁOŚ";
-  reportBtn.style.position = "fixed";
-  reportBtn.style.right = "20px";
-  reportBtn.style.bottom = "20px";
-  reportBtn.style.zIndex = "9999";
-  reportBtn.style.padding = "12px 20px";
-  reportBtn.style.background = "#d32f2f";
-  reportBtn.style.color = "#fff";
-  reportBtn.style.border = "none";
-  reportBtn.style.borderRadius = "10px";
-  reportBtn.style.fontSize = "18px";
-  reportBtn.style.cursor = "pointer";
-  reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-  document.body.appendChild(reportBtn);
-
-  // ============================================================
-  // OKNO ZGŁOSZENIA
-  // ============================================================
-
-  const reportWindow = document.createElement('div');
-  reportWindow.className = "friends-modal hidden";
-  reportWindow.innerHTML = `
-    <div class="friends-window" style="max-width:420px;">
-      <h3>Zgłoszenie gracza</h3>
-
-      <label>Nick gracza</label>
-      <input id="reportNick" placeholder="Nick gracza">
-
-      <label>Opis sytuacji</label>
-      <textarea id="reportText" rows="4" placeholder="Co się stało?"></textarea>
-
-      <button id="sendReportBtn">Wyślij zgłoszenie</button>
-      <button id="closeReportBtn" class="collapse-btn">Zamknij</button>
-    </div>
-  `;
-  document.body.appendChild(reportWindow);
-
-  // ============================================================
-  // OTWIERANIE OKNA
-  // ============================================================
-
-  reportBtn.onclick = () => {
-    reportWindow.classList.remove("hidden");
-  };
-
-  // ============================================================
-  // ZAMYKANIE OKNA
-  // ============================================================
-
-  reportWindow.querySelector("#closeReportBtn").onclick = () => {
-    reportWindow.classList.add("hidden");
-  };
-
-  // ============================================================
-  // WYSYŁANIE ZGŁOSZENIA
-  // ============================================================
-
-  reportWindow.querySelector("#sendReportBtn").onclick = () => {
-    const nick = reportWindow.querySelector("#reportNick").value.trim();
-    const text = reportWindow.querySelector("#reportText").value.trim();
-
-    if (!nick || !text) {
-      alert("Wypełnij oba pola!");
-      return;
-    }
-
-    reports.push({
-      from: currentUser,
-      target: nick,
-      text,
-      time: new Date().toLocaleString("pl-PL")
-    });
-
-    alert("Zgłoszenie wysłane!");
-
-    reportWindow.classList.add("hidden");
-  };
-
-})();
-// === ARCANNA SHOP FIX + CHARACTER CARDS ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. USUWAMY STARY PRZYCISK "SKRZYNIE"
-  // ============================================================
-
-  const oldCrateBtn = document.querySelector("#crateBtn");
-  if (oldCrateBtn) oldCrateBtn.remove();
-
-
-  // ============================================================
-  // 2. SKRZYNIA BRELOCZKÓW (TYLKO W SEKCJI BRELOCZKI)
-  // ============================================================
-
-  const keychainSection = document.querySelector("#shopKeychains");
-  if (keychainSection) {
-    const kcCrate = document.createElement("button");
-    kcCrate.textContent = "Skrzynia Breloczków";
-    kcCrate.style.marginTop = "20px";
-    kcCrate.style.padding = "10px 20px";
-    kcCrate.style.background = "#ffca28";
-    kcCrate.style.border = "none";
-    kcCrate.style.borderRadius = "8px";
-    kcCrate.style.cursor = "pointer";
-
-    kcCrate.onclick = () => {
-      alert("Otworzyłeś skrzynię breloczków! (tu dodasz losowanie)");
-    };
-
-    keychainSection.appendChild(kcCrate);
-  }
-
-
-  // ============================================================
-  // 3. SKRZYNIA KAPELUSZY (TYLKO W SEKCJI KAPELUSZE)
-  // ============================================================
-
-  const hatSection = document.querySelector("#shopHats");
-  if (hatSection) {
-    const hatCrate = document.createElement("button");
-    hatCrate.textContent = "Skrzynia Kapeluszy";
-    hatCrate.style.marginTop = "20px";
-    hatCrate.style.padding = "10px 20px";
-    hatCrate.style.background = "#29b6f6";
-    hatCrate.style.border = "none";
-    hatCrate.style.borderRadius = "8px";
-    hatCrate.style.cursor = "pointer";
-
-    hatCrate.onclick = () => {
-      alert("Otworzyłeś skrzynię kapeluszy! (tu dodasz losowanie)");
-    };
-
-    hatSection.appendChild(hatCrate);
-  }
-
-
-  // ============================================================
-  // 4. KARTY POSTACI — DODAJEMY NOWE
-  // ============================================================
-
-  const charSection = document.querySelector("#shopCharacters");
-  if (charSection) {
-
-    const characters = [
-      { id: "elektryczny", name: "Elektryczny", price: 0 },
-      { id: "piorun", name: "Piorun", price: 0 },
-      { id: "wladca_orlow", name: "Władca Orłów", price: 0 },
-      { id: "iluzjonista", name: "Iluzjonista", price: 0 }
-    ];
-
-    characters.forEach(c => {
-      const card = document.createElement("div");
-      card.className = "wizard-card";
-      card.style = `
-        background:#222;
-        color:#fff;
-        padding:15px;
-        border-radius:12px;
-        margin:10px;
-        width:160px;
-        text-align:center;
-        display:inline-block;
-        transition:transform 0.25s ease, box-shadow 0.25s ease;
-      `;
-
-      card.innerHTML = `
-        <h3>${c.name}</h3>
-        <p>Cena: ${c.price === 0 ? "Karnet" : c.price + " monet"}</p>
-      `;
-
-      // Animacja hover
-      card.addEventListener("mouseenter", () => {
-        card.style.transform = "scale(1.15)";
-        card.style.boxShadow = "0 0 18px rgba(255,255,255,0.4)";
-        card.style.zIndex = "1000";
-      });
-
-      card.addEventListener("mouseleave", () => {
-        card.style.transform = "scale(1)";
-        card.style.boxShadow = "none";
-        card.style.zIndex = "1";
-      });
-
-      charSection.appendChild(card);
-    });
-  }
-
-})();
-// === ARCANNA FIX: REMOVE OLD REPORT BUTTON + OWNER PANELS ONLY ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. USUWANIE STAREGO PRZYCISKU "ZGŁOŚ"
-  // ============================================================
-
-  const oldReportBtn = document.querySelector("#reportBtn");
-  if (oldReportBtn) oldReportBtn.remove();
-
-  const oldReportBtn2 = document.querySelector(".report-btn");
-  if (oldReportBtn2) oldReportBtn2.remove();
-
-  const oldReportBtn3 = document.querySelector("#zgloś");
-  if (oldReportBtn3) oldReportBtn3.remove();
-
-
-  // ============================================================
-  // 2. WŁAŚCICIEL NIE MA PANELU ADMINA ANI PÓŁ-ADMINA
-  // ============================================================
-
-  // Ustawiamy role poprawnie
-  if (!window.userRoles) window.userRoles = {};
-
-  // Adam jest właścicielem
-  userRoles["adam"] = "owner";
-
-  // Jeśli Adam miał wcześniej admina lub pół-admina → usuwamy
-  if (userRoles[currentUser] === "admin" && currentUser === "adam") {
-    userRoles[currentUser] = "owner";
-  }
-
-  if (userRoles[currentUser] === "half-admin" && currentUser === "adam") {
-    userRoles[currentUser] = "owner";
-  }
-
-  // ============================================================
-  // 3. BLOKADA PANELI ADMINA I PÓŁ-ADMINA DLA WŁAŚCICIELA
-  // ============================================================
-
-  // Usuwamy przyciski otwierające panel admina/pół-admina
-  const adminOpenBtn = document.querySelector(".admin-open-btn");
-  if (adminOpenBtn && currentUser === "adam") adminOpenBtn.remove();
-
-  const halfOpenBtn = document.querySelector(".half-admin-open-btn");
-  if (halfOpenBtn && currentUser === "adam") halfOpenBtn.remove();
-
-  // Jeśli panel admina istnieje → ukryj go dla właściciela
-  const adminPanel = document.querySelector("#adminPanel");
-  if (adminPanel && currentUser === "adam") adminPanel.remove();
-
-  // Jeśli panel pół-admina istnieje → ukryj go dla właściciela
-  const halfPanel = document.querySelector("#halfPanel");
-  if (halfPanel && currentUser === "adam") halfPanel.remove();
-
-})();
-// === ARCANNA FIX: PANELS ONLY AFTER LOGIN + REMOVE OLD REPORT BUTTON ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. USUWANIE STAREGO PRZYCISKU "ZGŁOŚ"
-  // ============================================================
-
-  const oldReport = document.querySelector("#reportBtn");
-  if (oldReport) oldReport.remove();
-
-  const oldReport2 = document.querySelector(".report-btn");
-  if (oldReport2) oldReport2.remove();
-
-  const oldReport3 = document.querySelector("#zgloś");
-  if (oldReport3) oldReport3.remove();
-
-
-  // ============================================================
-  // 2. UKRYWANIE PANELI PRZED LOGOWANIEM
-  // ============================================================
-
-  // Funkcja wywoływana po zalogowaniu
-  window.showRolePanels = function () {
-
-    if (!currentUser || currentUser.trim() === "") {
-      return; // niezalogowany → nic nie pokazujemy
-    }
-
-    const role = userRoles[currentUser];
-
-    // Właściciel → tylko panel właściciela
-    if (role === "owner") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Admin → pokazujemy tylko admin panel
-    if (role === "admin") {
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Pół-admin → pokazujemy tylko pół-admin panel
-    if (role === "half-admin") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-      return;
-    }
-
-    // Zwykły gracz → żadnych paneli
-    const adminBtn = document.querySelector(".admin-open-btn");
-    if (adminBtn) adminBtn.remove();
-
-    const halfBtn = document.querySelector(".half-admin-open-btn");
-    if (halfBtn) halfBtn.remove();
-  };
-// === ARCANNA FIX: SHOW REPORT BUTTON ONLY AFTER LOGIN ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // Funkcja uruchamiana po zalogowaniu
-  window.afterLoginUI = function () {
-
-    // Jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // ============================================================
-    // 1. NOWY PRZYCISK ZGŁOŚ — TYLKO PO ZALOGOWANIU
-    // ============================================================
-
-    const reportBtn = document.createElement('button');
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // Okno zgłoszenia
-    const reportWindow = document.createElement('div');
-    reportWindow.className = "friends-modal hidden";
-    reportWindow.innerHTML = `
-      <div class="friends-window" style="max-width:420px;">
-        <h3>Zgłoszenie gracza</h3>
-
-        <label>Nick gracza</label>
-        <input id="reportNick" placeholder="Nick gracza">
-
-        <label>Opis sytuacji</label>
-        <textarea id="reportText" rows="4" placeholder="Co się stało?"></textarea>
-
-        <button id="sendReportBtn">Wyślij zgłoszenie</button>
-        <button id="closeReportBtn" class="collapse-btn">Zamknij</button>
-      </div>
-    `;
-    document.body.appendChild(reportWindow);
-
-    reportBtn.onclick = () => reportWindow.classList.remove("hidden");
-    reportWindow.querySelector("#closeReportBtn").onclick = () =>
-      reportWindow.classList.add("hidden");
-
-    reportWindow.querySelector("#sendReportBtn").onclick = () => {
-      const nick = reportWindow.querySelector("#reportNick").value.trim();
-      const text = reportWindow.querySelector("#reportText").value.trim();
-
-      if (!nick || !text) {
-        alert("Wypełnij oba pola!");
-        return;
-      }
-
-      if (!window.reports) window.reports = [];
-      reports.push({
-        from: currentUser,
-        target: nick,
-        text,
-        time: new Date().toLocaleString("pl-PL")
-      });
-
-      alert("Zgłoszenie wysłane!");
-      reportWindow.classList.add("hidden");
-    };
-
-    // ============================================================
-    // 2. PANELE TYLKO DLA ODPOWIEDNICH RÓL
-    // ============================================================
-
-    // Właściciel → tylko panel właściciela
-    if (role === "owner") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Admin → tylko panel admina
-    if (role === "admin") {
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Pół-admin → tylko panel pół-admina
-    if (role === "half-admin") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-      return;
-    }
-
-    // Zwykły gracz → żadnych paneli
-    const adminBtn = document.querySelector(".admin-open-btn");
-    if (adminBtn) adminBtn.remove();
-
-    const halfBtn = document.querySelector(".half-admin-open-btn");
-    if (halfBtn) halfBtn.remove();
-  };
-
-})();
-// === ARCANNA FIX: PANELS + REPORT BUTTON ONLY AFTER LOGIN ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // Funkcja uruchamiana po zalogowaniu
-  window.afterLoginUI = function () {
-
-    // Jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // ============================================================
-    // 1. NOWY PRZYCISK ZGŁOŚ — TYLKO PO ZALOGOWANIU
-    // ============================================================
-
-    const reportBtn = document.createElement('button');
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // Okno zgłoszenia
-    const reportWindow = document.createElement('div');
-    reportWindow.className = "friends-modal hidden";
-    reportWindow.innerHTML = `
-      <div class="friends-window" style="max-width:420px;">
-        <h3>Zgłoszenie gracza</h3>
-
-        <label>Nick gracza</label>
-        <input id="reportNick" placeholder="Nick gracza">
-
-        <label>Opis sytuacji</label>
-        <textarea id="reportText" rows="4" placeholder="Co się stało?"></textarea>
-
-        <button id="sendReportBtn">Wyślij zgłoszenie</button>
-        <button id="closeReportBtn" class="collapse-btn">Zamknij</button>
-      </div>
-    `;
-    document.body.appendChild(reportWindow);
-
-    reportBtn.onclick = () => reportWindow.classList.remove("hidden");
-    reportWindow.querySelector("#closeReportBtn").onclick = () =>
-      reportWindow.classList.add("hidden");
-
-    reportWindow.querySelector("#sendReportBtn").onclick = () => {
-      const nick = reportWindow.querySelector("#reportNick").value.trim();
-      const text = reportWindow.querySelector("#reportText").value.trim();
-
-      if (!nick || !text) {
-        alert("Wypełnij oba pola!");
-        return;
-      }
-
-      if (!window.reports) window.reports = [];
-      reports.push({
-        from: currentUser,
-        target: nick,
-        text,
-        time: new Date().toLocaleString("pl-PL")
-      });
-
-      alert("Zgłoszenie wysłane!");
-      reportWindow.classList.add("hidden");
-    };
-
-    // ============================================================
-    // 2. PANELE TYLKO DLA ODPOWIEDNICH RÓL
-    // ============================================================
-
-    // Właściciel → tylko panel właściciela
-    if (role === "owner") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Admin → tylko panel admina
-    if (role === "admin") {
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    // Pół-admin → tylko panel pół-admina
-    if (role === "half-admin") {
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-      return;
-    }
-
-    // Zwykły gracz → żadnych paneli
-    const adminBtn = document.querySelector(".admin-open-btn");
-    if (adminBtn) adminBtn.remove();
-
-    const halfBtn = document.querySelector(".half-admin-open-btn");
-    if (halfBtn) halfBtn.remove();
-  };
-
-})();
-// === ARCANNA FIX: CLEAN LOGIN SCREEN ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // Usuwamy WSZYSTKO co nie powinno być na ekranie logowania
-  function cleanLoginScreen() {
-
-    // stare zgłoś
-    const oldReport = document.querySelector("#reportBtn");
-    if (oldReport) oldReport.remove();
-
-    const oldReport2 = document.querySelector(".report-btn");
-    if (oldReport2) oldReport2.remove();
-
-    const oldReport3 = document.querySelector("#zgloś");
-    if (oldReport3) oldReport3.remove();
-
-    // przyciski admina
-    const adminBtn = document.querySelector(".admin-open-btn");
-    if (adminBtn) adminBtn.remove();
-
-    // przyciski pół-admina
-    const halfBtn = document.querySelector(".half-admin-open-btn");
-    if (halfBtn) halfBtn.remove();
-
-    // panele admina
-    const adminPanel = document.querySelector("#adminPanel");
-    if (adminPanel) adminPanel.remove();
-
-    // panele pół-admina
-    const halfPanel = document.querySelector("#halfPanel");
-    if (halfPanel) halfPanel.remove();
-  }
-
-  // Uruchamiamy czyszczenie ekranu logowania NATYCHMIAST
-  cleanLoginScreen();
-
-
-  // ============================================================
-  // FUNKCJA URUCHAMIANA PO ZALOGOWANIU
-  // ============================================================
-
-  window.afterLoginUI = function () {
-
-    // Jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // NOWY przycisk zgłoś
-    const reportBtn = document.createElement('button');
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // PANELE WEDŁUG ROLI
-    if (role === "owner") {
-      // właściciel → tylko jego panel
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    if (role === "admin") {
-      // admin → tylko admin panel
-      const halfBtn = document.querySelector(".half-admin-open-btn");
-      if (halfBtn) halfBtn.remove();
-      return;
-    }
-
-    if (role === "half-admin") {
-      // pół-admin → tylko pół-admin panel
-      const adminBtn = document.querySelector(".admin-open-btn");
-      if (adminBtn) adminBtn.remove();
-      return;
-    }
-
-    // zwykły gracz → żadnych paneli
-    const adminBtn = document.querySelector(".admin-open-btn");
-    if (adminBtn) adminBtn.remove();
-
-    const halfBtn = document.querySelector(".half-admin-open-btn");
-    if (halfBtn) halfBtn.remove();
-  };
-
-})();
-// === ARCANNA FIX: CLEAN LOGIN SCREEN + ENABLE LOGIN SWITCH ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // Usuwamy WSZYSTKO co nie powinno być na ekranie logowania
-  function cleanLoginScreen() {
-
-    // stare zgłoś
-    document.querySelectorAll("#reportBtn, .report-btn, #zgloś").forEach(el => el.remove());
-
-    // przyciski admina
-    document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-
-    // przyciski pół-admina
-    document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-
-    // panele admina
-    const adminPanel = document.querySelector("#adminPanel");
-    if (adminPanel) adminPanel.remove();
-
-    // panele pół-admina
-    const halfPanel = document.querySelector("#halfPanel");
-    if (halfPanel) halfPanel.remove();
-  }
-
-  // Uruchamiamy czyszczenie ekranu logowania NATYCHMIAST
-  cleanLoginScreen();
-
-
-  // ============================================================
-  // FUNKCJA URUCHAMIANA PO ZALOGOWANIU
-  // ============================================================
-
-  window.afterLoginUI = function () {
-
-    // Jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // NOWY przycisk zgłoś
-    const reportBtn = document.createElement('button');
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // PANELE WEDŁUG ROLI
-    if (role === "owner") {
-      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "admin") {
-      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "half-admin") {
-      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    // zwykły gracz → żadnych paneli
-    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-  };
-
-})();
-// === ARCANNA: ONLY LOGIN WORKS BEFORE AUTH ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. USUWAMY WSZYSTKO CO NIE POWINNO BYĆ NA EKRANIE LOGOWANIA
-  // ============================================================
-
-  function cleanLoginScreen() {
-
-    // usuń stare zgłoś
-    document.querySelectorAll("#reportBtn, .report-btn, #zgloś").forEach(el => el.remove());
-
-    // usuń przyciski admina
-    document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-
-    // usuń przyciski pół-admina
-    document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-
-    // usuń panele admina
-    const adminPanel = document.querySelector("#adminPanel");
-    if (adminPanel) adminPanel.remove();
-
-    // usuń panele pół-admina
-    const halfPanel = document.querySelector("#halfPanel");
-    if (halfPanel) halfPanel.remove();
-
-    // usuń nowy przycisk zgłoś jeśli się pojawił
-    const newReport = document.querySelector("#newReportBtn");
-    if (newReport) newReport.remove();
-  }
-
-  // uruchamiamy czyszczenie NATYCHMIAST po wejściu na stronę
-  cleanLoginScreen();
-
-
-  // ============================================================
-  // 2. FUNKCJA URUCHAMIANA PO ZALOGOWANIU
-  // ============================================================
-
-  window.afterLoginUI = function () {
-
-    // jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // ============================================================
-    // 3. DOPIERO TERAZ TWORZYMY PRZYCISK ZGŁOŚ
-    // ============================================================
-
-    const reportBtn = document.createElement('button');
-    reportBtn.id = "newReportBtn";
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // ============================================================
-    // 4. PANELE WEDŁUG ROLI
-    // ============================================================
-
-    if (role === "owner") {
-      // właściciel → tylko jego panel
-      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "admin") {
-      // admin → tylko admin panel
-      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "half-admin") {
-      // pół-admin → tylko pół-admin panel
-      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    // zwykły gracz → żadnych paneli
-    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-  };
-
-})();
-// === ARCANNA: ONLY LOGIN WORKS BEFORE AUTH ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. BLOKADA WSZYSTKICH FUNKCJI PRZED LOGOWANIEM
-  // ============================================================
-
-  // Ta funkcja usuwa TYLKO elementy, które nie powinny być na ekranie logowania.
-  // NIE usuwa niczego z formularza logowania ani przełącznika.
-  function cleanLoginScreen() {
-
-    // usuń przyciski zgłoś
-    document.querySelectorAll("#newReportBtn, #reportBtn, .report-btn").forEach(el => el.remove());
-
-    // usuń przyciski admina
-    document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-
-    // usuń przyciski pół-admina
-    document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-
-    // usuń panele admina
-    const adminPanel = document.querySelector("#adminPanel");
-    if (adminPanel) adminPanel.remove();
-
-    // usuń panele pół-admina
-    const halfPanel = document.querySelector("#halfPanel");
-    if (halfPanel) halfPanel.remove();
-  }
-
-  // Uruchamiamy czyszczenie NATYCHMIAST po wejściu na stronę
-  cleanLoginScreen();
-
-
-  // ============================================================
-  // 2. FUNKCJE WŁĄCZANE DOPIERO PO ZALOGOWANIU
-  // ============================================================
-
-  window.afterLoginUI = function () {
-
-    // jeśli nie ma użytkownika → nic nie pokazujemy
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // ============================================================
-    // 3. NOWY PRZYCISK ZGŁOŚ — TYLKO PO ZALOGOWANIU
-    // ============================================================
-
-    const reportBtn = document.createElement('button');
-    reportBtn.id = "newReportBtn";
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    reportBtn.style.boxShadow = "0 0 10px rgba(0,0,0,0.4)";
-    document.body.appendChild(reportBtn);
-
-    // ============================================================
-    // 4. PANELE WEDŁUG ROLI
-    // ============================================================
-
-    if (role === "owner") {
-      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "admin") {
-      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "half-admin") {
-      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    // zwykły gracz → żadnych paneli
-    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-  };
-
-})();
-// === ARCANNA: HARD LOGIN PROTECTION ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // ============================================================
-  // 1. BLOKADA WSZYSTKIEGO PRZED LOGOWANIEM
-  // ============================================================
-
-  function blockEverythingBeforeLogin() {
-
-    // Usuwamy TYLKO elementy, które nie są częścią logowania
-    const forbiddenSelectors = [
-      ".admin-open-btn",
-      ".half-admin-open-btn",
-      "#adminPanel",
-      "#halfPanel",
-      "#newReportBtn",
-      "#reportBtn",
-      ".report-btn",
-      "#zgloś",
-      ".friends-modal",
-      ".friends-window"
-    ];
-
-    forbiddenSelectors.forEach(sel => {
-      document.querySelectorAll(sel).forEach(el => el.remove());
-    });
-  }
-
-  // Uruchamiamy blokadę NATYCHMIAST po wejściu na stronę
-  blockEverythingBeforeLogin();
-
-
-  // ============================================================
-  // 2. FUNKCJE WŁĄCZANE DOPIERO PO ZALOGOWANIU
-  // ============================================================
-
-  window.enableGameUI = function () {
-
-    if (!currentUser || currentUser.trim() === "") return;
-
-    const role = userRoles[currentUser];
-
-    // === NOWY przycisk zgłoś ===
-    const reportBtn = document.createElement("button");
-    reportBtn.id = "newReportBtn";
-    reportBtn.textContent = "ZGŁOŚ";
-    reportBtn.style.position = "fixed";
-    reportBtn.style.right = "20px";
-    reportBtn.style.bottom = "20px";
-    reportBtn.style.zIndex = "9999";
-    reportBtn.style.padding = "12px 20px";
-    reportBtn.style.background = "#d32f2f";
-    reportBtn.style.color = "#fff";
-    reportBtn.style.border = "none";
-    reportBtn.style.borderRadius = "10px";
-    reportBtn.style.fontSize = "18px";
-    reportBtn.style.cursor = "pointer";
-    document.body.appendChild(reportBtn);
-
-    // === PANELE WEDŁUG ROLI ===
-    if (role === "owner") {
-      // właściciel → tylko jego panel
-      document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "admin") {
-      // admin → tylko admin panel
-      document.querySelectorAll(".half-admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    if (role === "half-admin") {
-      // pół-admin → tylko pół-admin panel
-      document.querySelectorAll(".admin-open-btn").forEach(el => el.remove());
-      return;
-    }
-
-    // zwykły gracz → żadnych paneli
-    document.querySelectorAll(".admin-open-btn, .half-admin-open-btn").forEach(el => el.remove());
-  };
-
-})();
-// === ARCANNA: GLOBAL LOGIN LOCK ===
-// Wklej NA SAMYM DOLE game.js
-
-(function () {
-
-  // GLOBALNY LOCK — dopóki false, gra jest zablokowana
-  window.gameUnlocked = false;
-
-  // ============================================================
-  // 1. BLOKADA WSZYSTKICH FUNKCJI GRY PRZED LOGOWANIEM
-  // ============================================================
-
-  // Patchujemy funkcje gry, żeby nie działały przed logowaniem
-  const originalAddEventListener = EventTarget.prototype.addEventListener;
-
-  EventTarget.prototype.addEventListener = function (type, listener, options) {
-
-    // Jeśli gra jest zablokowana → blokujemy WSZYSTKO poza logowaniem
-    if (!window.gameUnlocked) {
-
-      // Jeśli to jest kliknięcie w formularz logowania → pozwalamy
-      const allowedIds = [
-    "loginBtn",
-    "registerBtn",
-    "loginSwitch",
-    "registerSwitch",
-    "loginTab",
-    "registerTab",
-    "loginToggle",
-    "registerToggle",
-    "loginMode",
-    "registerMode"
-];
-      if (this.id && allowedIds.includes(this.id)) {
-        return originalAddEventListener.call(this, type, listener, options);
-      }
-
-      // Blokujemy wszystkie inne eventy
-      return;
-    }
-
-    // Po odblokowaniu gra działa normalnie
-    return originalAddEventListener.call(this, type, listener, options);
-  };
-
-
-  // ============================================================
-  // 2. FUNKCJA ODPOWIADAJĄCA ZA ODBLOKOWANIE GRY
-  // ============================================================
-
-  window.unlockGame = function () {
-
-    // Użytkownik musi być zalogowany
-    if (!currentUser || currentUser.trim() === "") return;
-
-    // Odblokowujemy grę
-    window.gameUnlocked = true;
-
-    // Uruchamiamy UI gry
-    if (typeof window.enableGameUI === "function") {
-      window.enableGameUI();
-    }
-  };
-
-})();
-const skins = {
-    "yellow-purple": {
-        myColor: "yellow",
-        enemyColor: "purple",
-        price: 10000,
-        multiplier: 1.25
-    },
-    "green-pink": {
-        myColor: "green",
-        enemyColor: "pink",
-        price: 12500,
-        multiplier: 1.50
-    },
-    "blue-orange": {
-        myColor: "blue",
-        enemyColor: "orange",
-        price: 12000,
-        multiplier: 1.40
-    },
-    "white-black": {
-        myColor: "white",
-        enemyColor: "black",
-        price: 15000,
-        multiplier: 1.75
-    }
-};
-function applySkin(player, enemy, skinId) {
-    const skin = skins[skinId];
-    if (!skin) return;
-
-    player.color = skin.myColor;
-    enemy.color = skin.enemyColor;
-    player.damageMultiplier = skin.multiplier;
-}
-function buySkin(player, skinId) {
-    const skin = skins[skinId];
-    if (!skin) return "Skin nie istnieje";
-
-    if (!player.skinsOwned) player.skinsOwned = [];
-
-    if (player.skinsOwned.includes(skinId)) {
-        return "Masz już ten skin!";
-    }
-
-    if (player.coins < skin.price) {
-        return "Masz za mało monet!";
-    }
-
-    player.coins -= skin.price;
-    player.skinsOwned.push(skinId);
-
-    return "Kupiono skin!";
-}
-function registerAccount(nick, password, accounts) {
-    if (accounts[nick]) {
-        alert("Takie konto już istnieje!");
-        return false;
-    }
-
-    accounts[nick] = {
-        password: password,
-        coins: 0,
-        skinsOwned: []
-    };
-
-    return true;
-}
-const shopCategories = {
-    items: [],
-    boosts: [],
-    skins: [
-        {
-            id: "yellow-purple",
-            name: "Żółty – Fioletowy",
-            price: 10000,
-            multiplier: 1.25
-        },
-        {
-            id: "green-pink",
-            name: "Zielony – Różowy",
-            price: 12500,
-            multiplier: 1.50
-        },
-        {
-            id: "blue-orange",
-            name: "Granatowy – Pomarańczowy",
-            price: 12000,
-            multiplier: 1.40
-        },
-        {
-            id: "white-black",
-            name: "Biały – Czarny",
-            price: 15000,
-            multiplier: 1.75
-        }
-    ]
-};
-function showSkinShop(player) {
-    console.log("=== SKLEP: SKINY ===");
-
-    shopCategories.skins.forEach(skin => {
-        const owned = player.skinsOwned.includes(skin.id) ? " (POSIADASZ)" : "";
-        console.log(
-            `${skin.name} — ${skin.price} monet — mnożnik ${skin.multiplier}${owned}`
-        );
-    });
-}
-function buySkinFromShop(player, skinId) {
-    const skin = shopCategories.skins.find(s => s.id === skinId);
-    if (!skin) return "Skin nie istnieje";
-
-    if (player.skinsOwned.includes(skinId)) {
-        return "Masz już ten skin!";
-    }
-
-    if (player.coins < skin.price) {
-        return "Masz za mało monet!";
-    }
-
-    player.coins -= skin.price;
-    player.skinsOwned.push(skinId);
-
-    return "Kupiono skin!";
-}
-function applySkin(player, enemy, skinId) {
-    const skin = shopCategories.skins.find(s => s.id === skinId);
-    if (!skin) return;
-
-    player.color = skinId.split("-")[0];   // kolor gracza
-    enemy.color = skinId.split("-")[1];    // kolor przeciwnika
-    player.damageMultiplier = skin.multiplier;
-}
-function registerAccount(nick, password, accounts) {
-    if (accounts[nick]) {
-        alert("Takie konto już istnieje!");
-        return false;
-    }
-
-    accounts[nick] = {
-        password: password,
-        coins: 0,
-        skinsOwned: []
-    };
-
-    return true;
-}
-function registerAccount(nick, password, accounts) {
-    if (accounts[nick]) {
-        alert("Takie konto już istnieje!");
-        return false;
-    }
-
-    accounts[nick] = {
-        password: password,
-        coins: 0,
-        skinsOwned: [],      // TU ZAPISUJEMY SKINY
-        selectedSkin: null   // TU ZAPISUJEMY WYBRANY SKIN
-    };
-
-    return true;
-}
-function buySkin(player, skinId) {
-    const skin = skins[skinId];
-    if (!skin) return "Skin nie istnieje";
-
-    if (!player.skinsOwned) player.skinsOwned = [];
-
-    if (player.skinsOwned.includes(skinId)) {
-        return "Masz już ten skin!";
-    }
-
-    if (player.coins < skin.price) {
-        return "Masz za mało monet!";
-    }
-
-    player.coins -= skin.price;
-    player.skinsOwned.push(skinId);   // ZAPIS SKINA NA KONCIE
-
-    return "Kupiono skin!";
-}
-function applySkin(player, enemy, skinId) {
-    const skin = skins[skinId];
-    if (!skin) return;
-
-    player.color = skin.myColor;
-    enemy.color = skin.enemyColor;
-    player.damageMultiplier = skin.multiplier;
-
-    player.selectedSkin = skinId;   // ZAPIS WYBRANEGO SKINA
-}
-function isLaptop() {
-    const ua = navigator.userAgent.toLowerCase();
-    return ua.includes("windows") || ua.includes("macintosh") || ua.includes("linux");
-}
-function shootBullet(player, enemy) {
-    let bullet = {
-        x: player.x,
-        y: player.y,
-        speed: 10,
-        autoAim: true
-    };
-
-    // jeśli laptop → autoAim = false
-    if (isLaptop()) {
-        bullet.autoAim = false;
-    }
-
-    bullets.push(bullet);
-}
-function updateBullet(bullet, enemy) {
-    if (bullet.autoAim) {
-        // auto namierzanie (telefon)
-        const dx = enemy.x - bullet.x;
-        const dy = enemy.y - bullet.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-
-        bullet.x += (dx / dist) * bullet.speed;
-        bullet.y += (dy / dist) * bullet.speed;
-    } else {
-        // laptop → pocisk leci prosto
-        bullet.y -= bullet.speed;
-    }
-}
-const availableDevices = [
-    { id: "pc", name: "Laptop / Komputer", autoAim: false },
-    { id: "mobile", name: "Telefon", autoAim: true }
-];
-function changeDevice(player, deviceId) {
-    const device = availableDevices.find(d => d.id === deviceId);
-    if (!device) return "Urządzenie nie istnieje";
-
-    player.device = deviceId;
-    player.autoAim = device.autoAim;
-
-    return "Urządzenie zmienione!";
-}
-function showDeviceSelection(player) {
-    console.log("=== WYBÓR URZĄDZENIA ===");
-
-    availableDevices.forEach(device => {
-        const selected = player.device === device.id ? " (AKTUALNE)" : "";
-        console.log(`${device.name}${selected}`);
-    });
-
-    console.log("Użyj: changeDevice(player, 'pc') lub changeDevice(player, 'mobile')");
-}
-function openProfile(player) {
-    console.log("=== PROFIL ===");
-    console.log("Nick:", player.nick);
-    console.log("Monety:", player.coins);
-    console.log("Skiny:", player.skinsOwned);
-    console.log("Urządzenie:", player.device);
-    console.log("Kliknij: showDeviceSelection(player) aby zmienić urządzenie");
-}
-function shootBullet(player, enemy) {
-    let bullet = {
-        x: player.x,
-        y: player.y,
-        speed: 10,
-        autoAim: player.autoAim // zależy od urządzenia
-    };
-
-    bullets.push(bullet);
-}
-function updateBullet(bullet, enemy) {
-    if (bullet.autoAim) {
-        // telefon → auto namierzanie
-        const dx = enemy.x - bullet.x;
-        const dy = enemy.y - bullet.y;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-
-        bullet.x += (dx / dist) * bullet.speed;
-        bullet.y += (dy / dist) * bullet.speed;
-    } else {
-        // laptop → pocisk leci prosto
-        bullet.y -= bullet.speed;
-    }
-}
-let keyboardUsed = false;
-
-window.addEventListener("keydown", () => {
-    keyboardUsed = true;
-});
-function banPlayer(player, days) {
-    const now = Date.now();
-    const banTime = now + (days * 24 * 60 * 60 * 1000); // dni → ms
-
-    player.bannedUntil = banTime;
-}
-function isPlayerBanned(player) {
-    if (!player.bannedUntil) return false;
-    return Date.now() < player.bannedUntil;
-}
-function checkDeviceBan(player) {
-    if (player.device === "mobile" && keyboardUsed) {
-        banPlayer(player, 2);
-        alert("Zostałeś zbanowany na 2 dni za używanie klawiatury na urządzeniu mobilnym!");
-    }checkDeviceBan(player);
-}
-function blockIfBanned(player) {
-    if (isPlayerBanned(player)) {
-        alert("Twoje konto jest zbanowane na 2 dni. Poczekaj na zakończenie blokady.");
-        return true; // blokuje grę
-    }
-    return false;
-}
-if (blockIfBanned(player)) return;
-accounts[nick] = {
-    password: password,
-    coins: 0,
-    skinsOwned: [],
-    selectedSkin: null,
-    device: "pc",
-    loginAttempts: 0,        // ile razy źle wpisał hasło
-    loginBlockedUntil: null  // czas do którego jest blokada
-};
-function isLoginBlocked(account) {
-    if (!account.loginBlockedUntil) return false;
-    return Date.now() < account.loginBlockedUntil;
-}
-function login(nick, password, accounts) {
-    const account = accounts[nick];
-    if (!account) {
-        alert("Konto nie istnieje!");
-        return false;
-    }
-
-    // sprawdzamy czy jest blokada
-    if (isLoginBlocked(account)) {
-        alert("Za dużo błędnych prób! Spróbuj ponownie za 10 minut.");
-        return false;
-    }
-
-    // poprawne hasło
-    if (account.password === password) {
-        account.loginAttempts = 0;          // reset prób
-        return true;
-    }
-
-    // błędne hasło
-    account.loginAttempts++;
-
-    if (account.loginAttempts >= 4) {
-        account.loginBlockedUntil = Date.now() + (10 * 60 * 1000); // 10 minut
-        alert("Pomyliłeś hasło 4 razy! Blokada na 10 minut.");
-    } else {
-        alert("Złe hasło! Próba: " + account.loginAttempts + "/4");
-    }
-
-    return false;
-}
-function resetRanking(owner) {
-    if (!owner || owner.role !== "owner") {
-        alert("Tylko właściciel może resetować ranking!");
-        return;
-    }
-
-    ranking = []; // czyści cały ranking
-
-    alert("Ranking został zresetowany!");
-}
-function ownerPanel(owner) {
-    console.log("=== PANEL WŁAŚCICIELA ===");
-    console.log("1. Zbanuj gracza");
-    console.log("2. Odbanuj gracza");
-    console.log("3. Dodaj admina");
-    console.log("4. Dodaj pół-admina");
-    console.log("5. Resetuj konto gracza");
-    console.log("6. Resetuj ranking (drewno 1)");
-    console.log("7. Zwiń panel");
-
-}
-if (choice === 6) {
-    resetRanking(owner);
-}
-function resetRanking(owner, accounts) {
-    if (!owner || owner.role !== "owner") {
-        alert("Tylko właściciel może resetować ranking!");
-        return;
-    }
-
-    for (let nick in accounts) {
-        accounts[nick].rank = "drewno 1";   // ustawiamy rank
-        accounts[nick].points = 0;          // zerujemy punkty rankingu
-    }
-
-    alert("Ranking został zresetowany! Wszystkie konta mają teraz: drewno 1");
-}
-function updateRankingTable() {
-    // zamieniamy accounts na listę
-    let list = Object.keys(accounts).map(nick => {
-        return {
-            nick: nick,
-            rank: accounts[nick].rank,
-            points: accounts[nick].points
-        };
-    });
-
-    // sortowanie po punktach (od największych)
-    list.sort((a, b) => b.points - a.points);
-
-    // wybór trybu tabeli
-    let limit = rankingMode === "top20" ? 20 : 10;
-
-    // pobieramy top X
-    let topPlayers = list.slice(0, limit);
-
-    // wyświetlamy w tabeli
-    renderRanking(topPlayers);
-}
-function renderRanking(players) {
-    const rankingList = document.getElementById("rankingList");
-    rankingList.innerHTML = "";
-
-    players.forEach((p, index) => {
-        const row = document.createElement("div");
-        row.className = "friend-item";
-        row.innerHTML = `
-            <span><strong>${index + 1}.</strong> ${p.nick}</span>
-            <span>Rank: ${p.rank} | Punkty: ${p.points}</span>
-        `;
-        rankingList.appendChild(row);
-    });
-}
-
-if (mode === "ranked20") rankingMode = "top20";
-if (mode === "ranked10") rankingMode = "top10";
-
-updateRankingTable();
