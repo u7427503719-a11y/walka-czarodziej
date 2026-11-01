@@ -1,3 +1,4 @@
+//serwer.js
 const http = require('http');
 const fs = require('fs');
 const path = require('path');
@@ -81,10 +82,23 @@ function migrateOwnerAccount() {
 migrateOwnerAccount();
 
 function readCareer() {
+  let contents;
   try {
-    const career = JSON.parse(fs.readFileSync(careerFile, 'utf8'));
-    return { players: career.players || {}, months: career.months || {} };
-  } catch { return { players: {}, months: {} }; }
+    contents = fs.readFileSync(careerFile, 'utf8');
+  } catch (error) {
+    if (error.code === 'ENOENT') return { players: {}, months: {} };
+    throw error;
+  }
+  const career = JSON.parse(contents);
+  if (!career || typeof career !== 'object' || Array.isArray(career)) {
+    throw new Error('NIEPRAWIDŁOWY PLIK POSTĘPÓW');
+  }
+  const players = career.players ?? {};
+  const months = career.months ?? {};
+  if (typeof players !== 'object' || Array.isArray(players) || typeof months !== 'object' || Array.isArray(months)) {
+    throw new Error('NIEPRAWIDŁOWY PLIK POSTĘPÓW');
+  }
+  return { players, months };
 }
 
 function writeCareer(career) {
@@ -189,15 +203,12 @@ async function handleAuthRequest(request, response) {
     let account = accountEntry?.[1];
     if (action === 'register') {
       if (key === ownerNick) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
-      if (accountEntry || activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
+      if (accountEntry) { sendJson(response, 409, { error: 'TAKIE KONTO JUŻ ISTNIEJE' }); return true; }
+      if (activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
       const credentials = hashPassword(password);
       account = { nick, ...credentials, role: key === ownerNick ? 'owner' : 'user' };
       accounts[key] = account;
-    } else if (!account && input.legacyAccount?.nick?.toLowerCase() === key && input.legacyAccount.password === password) {
-      const credentials = hashPassword(password);
-      account = { nick, ...credentials, role: 'user' };
-      accounts[key] = account;
-    } else if (!account) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true; }
+    } else if (!account) { sendJson(response, 404, { error: 'KONTO O PODANYM NICKU NIE ISTNIEJE NA SERWERZE' }); return true; }
     else {
       const actual = Buffer.from(hashPassword(password, account.salt).hash, 'hex');
       const expected = Buffer.from(account.hash, 'hex');
@@ -250,6 +261,23 @@ async function handleOwnerRequest(request, response) {
   if (!verifyOwnerCredentials(input.ownerNick, input.password, accounts)) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWE HASŁO WŁAŚCICIELA' }); return; }
   const action = request.url.split('?')[0].slice('/api/owner/'.length);
   if (action === 'verify-password') { sendJson(response, 200, { verified: true }); return; }
+  if (action === 'set-role') {
+    const target = findAccountEntry(accounts, input.targetNick);
+    const role = String(input.role || '');
+    if (!target || !['admin', 'half-admin', 'user'].includes(role)) { sendJson(response, 400, { error: 'NIEPRAWIDŁOWY GRACZ LUB ROLA' }); return; }
+    if ((target[0] === ownerNick || normalizeNick(target[1].nick).toLowerCase() === ownerNick) && role !== 'owner') { sendJson(response, 403, { error: 'NIE MOŻNA ZMIENIĆ ROLI WŁAŚCICIELA' }); return; }
+    target[1].role = role;
+    writeAccounts(accounts);
+    sendJson(response, 200, { account: publicAccount(target[1]) });
+    return;
+  }
+  if (action === 'reset-ranking') {
+    const career = readCareer();
+    for (const player of Object.values(career.players)) player.rankPoints = 0;
+    writeCareer(career);
+    sendJson(response, 200, { resetPlayers: Object.keys(career.players).length });
+    return;
+  }
   if (action !== 'grant-wizard') { sendJson(response, 404, { error: 'NIEZNANA OPERACJA' }); return; }
   const targetKey = String(input.targetNick || '').trim().toLowerCase();
   const target = accounts[targetKey];
@@ -259,9 +287,31 @@ async function handleOwnerRequest(request, response) {
   sendJson(response, 200, { account: publicAccount(target) });
 }
 
+function handleRankingRequest(request, response) {
+  if (request.method !== 'GET') { sendJson(response, 405, { error: 'NIEDOZWOLONA METODA' }); return; }
+  const mode = request.url.split('?')[0].slice('/api/ranking/'.length);
+  if (!['ranked', 'kills', 'wins'].includes(mode)) { sendJson(response, 404, { error: 'NIEZNANY RANKING' }); return; }
+  const career = readCareer();
+  let players;
+  if (mode === 'wins') {
+    players = Object.values(career.months[warsawMonthKey()]?.scores || {})
+      .map(player => ({ nick: String(player.nick || 'GRACZ'), wins: Math.max(0, Number(player.wins) || 0) }))
+      .sort((left, right) => right.wins - left.wins || left.nick.localeCompare(right.nick))
+      .slice(0, 10);
+  } else {
+    players = Object.values(career.players)
+      .map(player => ({ nick: String(player.nick || 'GRACZ'), [mode === 'ranked' ? 'rankPoints' : 'kills']: Math.max(0, Number(player[mode === 'ranked' ? 'rankPoints' : 'kills']) || 0) }))
+      .filter(player => mode !== 'kills' || player.kills > 0)
+      .sort((left, right) => (mode === 'ranked' ? right.rankPoints - left.rankPoints : right.kills - left.kills) || left.nick.localeCompare(right.nick))
+      .slice(0, mode === 'ranked' ? 10 : 20);
+  }
+  sendJson(response, 200, players);
+}
+
 const server = http.createServer((request, response) => {
   if (request.url.startsWith('/api/auth/')) { handleAuthRequest(request, response).catch(() => sendJson(response, 500, { error: 'BŁĄD SERWERA' })); return; }
   if (request.url.startsWith('/api/owner/')) { handleOwnerRequest(request, response).catch(() => sendJson(response, 500, { error: 'BŁĄD SERWERA' })); return; }
+  if (request.url.startsWith('/api/ranking/')) { handleRankingRequest(request, response); return; }
   const requestedPath = request.url === '/' ? '/index.html' : request.url.split('?')[0];
   const filePath = path.join(root, path.normalize(requestedPath));
   if (!filePath.startsWith(root) || path.resolve(filePath) === path.resolve(accountFile) || !fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
@@ -289,8 +339,15 @@ function finishRoom(socket, message) {
   const winner = [...room].find(player => player.nick?.toLowerCase() === winnerNick.toLowerCase());
   const winnerTeamId = message.winnerTeamId || winner?.teamId || socket.teamId || '';
   if (!winner || winner.teamId !== socket.teamId || winner.teamId !== winnerTeamId) return;
+  const career = readCareer();
+  for (const [victim, killer] of room.killClaims || []) {
+    if (!room.has(victim) || !room.has(killer) || victim.teamId === winnerTeamId || killer.teamId !== winnerTeamId) continue;
+    const key = killer.nick.toLowerCase();
+    const record = career.players[key] || { nick: killer.nick, dailyKey: warsawDailyKey(), dailyWins: 0, dailyBoxes: 0 };
+    record.kills = Math.max(0, Number(record.kills) || 0) + 1;
+    career.players[key] = record;
+  }
   if ([...room].every(player => player.rankedMatch)) {
-    const career = readCareer();
     for (const player of room) {
       const key = player.nick.toLowerCase();
       const record = career.players[key] || { nick: player.nick, dailyKey: warsawDailyKey(), dailyWins: 0, dailyBoxes: 0 };
@@ -299,8 +356,8 @@ function finishRoom(socket, message) {
       player.rankedMatch = false;
       send(player, careerState(career, key));
     }
-    writeCareer(career);
   }
+  writeCareer(career);
   room.forEach(player => { send(player, { type: 'round-ended', winnerNick, winnerTeamId }); player.room = ''; });
   rooms.delete(code);
 }
@@ -392,6 +449,33 @@ webSocketServer.on('connection', socket => {
     if (message.type === 'trade-commit') { const targetNick = String(message.targetNick || '').toLowerCase(); const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|'); const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() }; const offer = safeTradeOffer(message.offer); session.offers.set(socket.nick.toLowerCase(), offer); session.members.set(socket.nick.toLowerCase(), { socket, offer }); tradeSessions.set(tradeKey, session); if (session.members.size === 2) { const [first, second] = [...session.members.values()]; send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick }); send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick }); tradeSessions.delete(tradeKey); } return; }
     if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1'), message.ranked === true); return; }
     if (message.type === 'queue-cancel') { if (socket.rankedQueueActive) { socket.rankedFallbackOpen = true; socket.rankedQueueActive = false; } removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
+    if (message.type === 'bot-match-start') {
+      const botMatchLimits = { bot: 1, 'bot-one-two': 2, 'bot-one-three': 3, 'bot-two-two': 2 };
+      const mode = String(message.mode || '');
+      if (!socket.nick || socket.room || !botMatchLimits[mode]) return;
+      if (socket.botMatch?.active && Date.now() - socket.botMatch.startedAt < 10 * 60 * 1000) return;
+      socket.botMatch = { mode, maxKills: botMatchLimits[mode], targets: new Set(), startedAt: Date.now(), active: true };
+      return;
+    }
+    if (message.type === 'bot-match-end') { if (socket.botMatch) socket.botMatch.active = false; return; }
+    if (message.type === 'career-bot-kill') {
+      const match = socket.botMatch;
+      const targetMatch = String(message.targetId || '').match(/^bot-([1-3])$/);
+      if (!socket.nick || socket.room || !match?.active || Date.now() - match.startedAt > 10 * 60 * 1000 || !targetMatch) return;
+      const targetId = `bot-${targetMatch[1]}`;
+      if (Number(targetMatch[1]) > match.maxKills || match.targets.has(targetId)) return;
+      const career = readCareer();
+      const key = socket.nick.toLowerCase();
+      const player = career.players[key] || { nick: socket.nick, dailyKey: warsawDailyKey(), dailyWins: 0, dailyBoxes: 0 };
+      player.nick = socket.nick;
+      player.kills = Math.max(0, Number(player.kills) || 0) + 1;
+      career.players[key] = player;
+      const state = careerState(career, key);
+      writeCareer(career);
+      match.targets.add(targetId);
+      send(socket, state);
+      return;
+    }
     if (message.type === 'ranked-bot-result' && socket.rankedFallbackOpen && socket.nick) {
       socket.rankedFallbackOpen = false;
       const career = readCareer();
@@ -419,6 +503,14 @@ webSocketServer.on('connection', socket => {
     }
     if (!socket.room) return;
     if (message.type === 'game-over') { finishRoom(socket, message); return; }
+    if (message.type === 'kill' && message.targetNick) {
+      const room = rooms.get(socket.room);
+      const target = [...(room || [])].find(player => player.nick?.toLowerCase() === String(message.targetNick).toLowerCase());
+      if (!room || !target || target === socket || target.teamId === socket.teamId) return;
+      room.killClaims ||= new Map();
+      if (!room.killClaims.has(target)) room.killClaims.set(target, socket);
+      return;
+    }
     if (message.type === 'damage' && message.targetNick) {
       const target = [...(rooms.get(socket.room) || [])].find(player => player.nick?.toLowerCase() === String(message.targetNick).toLowerCase());
       if (target) send(target, { ...message, fromNick: socket.nick });
