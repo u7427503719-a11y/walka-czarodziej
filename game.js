@@ -17,7 +17,9 @@ addEventListener('click', event => {
   const chest = event.target.closest('[data-chest]');
   if (chest) openChest(chest.dataset.chest);
   const pass = event.target.closest('[data-pass]');
-  if (pass) window.buyPass?.(pass.dataset.pass);
+  if (pass) window.selectPass?.(pass.dataset.pass);
+  const passAction = event.target.closest('[data-pass-action]');
+  if (passAction) window.handlePassAction?.(passAction.dataset.passAction);
 });
 const auth = { screen: document.getElementById('authScreen'), registerTab: document.getElementById('registerTab'), loginTab: document.getElementById('loginTab'), registerForm: document.getElementById('registerForm'), loginForm: document.getElementById('loginForm'), registerNick: document.getElementById('registerNick'), registerPassword: document.getElementById('registerPassword'), registerNickError: document.getElementById('registerNickError'), loginNick: document.getElementById('loginNick'), loginPassword: document.getElementById('loginPassword'), loginError: document.getElementById('loginError') };
 const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), resetRanking: document.getElementById('resetRankingButton'), giveWizard: document.getElementById('giveWizardButton') };
@@ -72,21 +74,32 @@ function collectAccountProgress(nick) {
   const maps = {};
   for (const name of progressMapNames) {
     const map = getMap(name);
-    if (Object.prototype.hasOwnProperty.call(map, key)) maps[name] = map[key];
+    if (Object.prototype.hasOwnProperty.call(map, key)) maps[name] = { __arcanaValue: map[key] };
   }
   const account = getAccounts()[key];
   return { account: { coins: Number(account?.coins ?? getMap('arcanaBalances')[key] ?? 0) || 0 }, maps };
 }
 function hasAccountProgress(progress) {
   return Number(progress?.account?.coins) > 0 ||
-    Object.values(progress?.maps || {}).some(map => map && Object.keys(map).length > 0);
+    Object.values(progress?.maps || {}).some(entry => {
+      const value = entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, '__arcanaValue')
+        ? entry.__arcanaValue
+        : entry;
+      return value && typeof value === 'object' ? Object.keys(value).length > 0 : Boolean(value);
+    });
 }
 function applyAccountProgress(nick, progress) {
   const key = nick.toLowerCase();
   for (const name of progressMapNames) {
     const map = getMap(name);
-    if (Object.prototype.hasOwnProperty.call(progress?.maps || {}, name)) map[key] = progress.maps[name];
-    else delete map[key];
+    const entry = progress?.maps?.[name];
+    if (entry && typeof entry === 'object' && !Array.isArray(entry) && Object.prototype.hasOwnProperty.call(entry, '__arcanaValue')) {
+      map[key] = entry.__arcanaValue;
+    } else if (entry !== undefined) {
+      map[key] = entry;
+    } else {
+      delete map[key];
+    }
     saveMap(name, map);
   }
 }
@@ -2679,48 +2692,10 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
     msg.textContent = "Kupiono VIP!";
 
-    // Zapisujemy czas ostatniego bonusu
-    localStorage.setItem("vipDaily_" + currentUser, new Date().toISOString());
-  };
+    };
 
-  // ============================================================
-  // 3. VIP BONUS CODZIENNY +500 O 7:00 CZASU POLSKIEGO
-  // ============================================================
-
-  function getPolishDate() {
-    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
-  }
-
-  function shouldGiveVipDaily(last) {
-    const now = getPolishDate();
-    if (!last) return true;
-
-    const lastDate = new Date(last);
-
-    if (now.getDate() !== lastDate.getDate()) {
-      const seven = new Date(now);
-      seven.setHours(7, 0, 0, 0);
-
-      if (now > seven) return true;
-    }
-
-    return false;
-  }
-
-  setInterval(() => {
-    if (!window.playerData?.[currentUser]?.vip) return;
-
-    const last = localStorage.getItem("vipDaily_" + currentUser);
-
-    if (shouldGiveVipDaily(last)) {
-      window.playerMoney += 500;
-      localStorage.setItem("vipDaily_" + currentUser, new Date().toISOString());
-    }
-
-  }, 60000);
-
-  // ============================================================
-  // 4. VIP MNOŻNIK PIENIĘDZY
+    // ============================================================
+    // 4. VIP MNOŻNIK PIENIĘDZY
   // ============================================================
 
   window.applyMoneyMultiplier = function (amount) {
@@ -2806,45 +2781,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
     svipMsg.textContent = "Kupiono SVIP!";
 
-    // Zapisujemy czas ostatniego bonusu
-    localStorage.setItem("svipDaily_" + currentUser, new Date().toISOString());
   };
-
-  // ============================================================
-  // 3. SVIP BONUS CODZIENNY +750 O 7:00 CZASU POLSKIEGO
-  // ============================================================
-
-  function getPolishDate() {
-    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
-  }
-
-  function shouldGiveSvipDaily(last) {
-    const now = getPolishDate();
-    if (!last) return true;
-
-    const lastDate = new Date(last);
-
-    if (now.getDate() !== lastDate.getDate()) {
-      const seven = new Date(now);
-      seven.setHours(7, 0, 0, 0);
-
-      if (now > seven) return true;
-    }
-
-    return false;
-  }
-
-  setInterval(() => {
-    if (!window.playerData?.[currentUser]?.svip) return;
-
-    const last = localStorage.getItem("svipDaily_" + currentUser);
-
-    if (shouldGiveSvipDaily(last)) {
-      window.playerMoney += 750;
-      localStorage.setItem("svipDaily_" + currentUser, new Date().toISOString());
-    }
-
-  }, 60000);
 
   // ============================================================
   // 4. SVIP MNOŻNIK PIENIĘDZY
@@ -2935,45 +2872,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
     gvipMsg.textContent = "Kupiono GVIP!";
 
-    // Zapisujemy czas ostatniego bonusu
-    localStorage.setItem("gvipDaily_" + currentUser, new Date().toISOString());
   };
-
-  // ============================================================
-  // 3. GVIP BONUS CODZIENNY +1000 O 7:00 CZASU POLSKIEGO
-  // ============================================================
-
-  function getPolishDate() {
-    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
-  }
-
-  function shouldGiveGvipDaily(last) {
-    const now = getPolishDate();
-    if (!last) return true;
-
-    const lastDate = new Date(last);
-
-    if (now.getDate() !== lastDate.getDate()) {
-      const seven = new Date(now);
-      seven.setHours(7, 0, 0, 0);
-
-      if (now > seven) return true;
-    }
-
-    return false;
-  }
-
-  setInterval(() => {
-    if (!window.playerData?.[currentUser]?.gvip) return;
-
-    const last = localStorage.getItem("gvipDaily_" + currentUser);
-
-    if (shouldGiveGvipDaily(last)) {
-      window.playerMoney += 1000;
-      localStorage.setItem("gvipDaily_" + currentUser, new Date().toISOString());
-    }
-
-  }, 60000);
 
   // ============================================================
   // 4. GVIP MNOŻNIK PIENIĘDZY
@@ -3053,40 +2952,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
     premiumMsg.textContent = "Kupiono PREMIUM!";
 
-    localStorage.setItem("premiumDaily_" + currentUser, new Date().toISOString());
   };
-
-  function getPolishDate() {
-    return new Date(new Date().toLocaleString("en-US", { timeZone: "Europe/Warsaw" }));
-  }
-
-  function shouldGivePremiumDaily(last) {
-    const now = getPolishDate();
-    if (!last) return true;
-
-    const lastDate = new Date(last);
-
-    if (now.getDate() !== lastDate.getDate()) {
-      const seven = new Date(now);
-      seven.setHours(7, 0, 0, 0);
-
-      if (now > seven) return true;
-    }
-
-    return false;
-  }
-
-  setInterval(() => {
-    if (!window.playerData?.[currentUser]?.premium) return;
-
-    const last = localStorage.getItem("premiumDaily_" + currentUser);
-
-    if (shouldGivePremiumDaily(last)) {
-      window.playerMoney += 1500;
-      localStorage.setItem("premiumDaily_" + currentUser, new Date().toISOString());
-    }
-
-  }, 60000);
 
   const oldMultiplier = window.applyMoneyMultiplier;
 
@@ -3121,6 +2987,66 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     gvip: "GVIP",
     premium: "PREMIUM"
   };
+  const PASS_DAILY_REWARDS = { vip: 500, svip: 750, gvip: 1000, premium: 1500 };
+  const PASS_BENEFITS = {
+    vip: { character: 'ELEKTRYCZNY', skin: 'VIP ELEKTRYCZNY', multiplier: 'x1,25' },
+    svip: { character: 'ILUZJONISTA', skin: 'SVIP ILUZJONISTA', multiplier: 'x1,5' },
+    gvip: { character: 'PIORUN', skin: 'GVIP PIORUN', multiplier: 'x1,75' },
+    premium: { character: 'WŁADCA ORŁÓW', skin: 'PREMIUM WŁADCA ORŁÓW', multiplier: 'x2' }
+  };
+  const LEGACY_DAILY_KEYS = { vip: 'vipDaily_', svip: 'svipDaily_', gvip: 'gvipDaily_', premium: 'premiumDaily_' };
+  let selectedPassId = '';
+
+  function getPolishDateParts(date = new Date()) {
+    const parts = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Warsaw',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      hourCycle: 'h23'
+    }).formatToParts(date);
+    return Object.fromEntries(parts.filter(part => part.type !== 'literal').map(part => [part.type, part.value]));
+  }
+
+  function getPolishDayKey(date) {
+    if (!Number.isFinite(date.getTime())) return '';
+    const parts = getPolishDateParts(date);
+    const day = Number(parts.day) - (Number(parts.hour) < 7 ? 1 : 0);
+    return new Date(Date.UTC(Number(parts.year), Number(parts.month) - 1, day)).toISOString().slice(0, 10);
+  }
+
+  function getLastClaimDay(account, passId) {
+    const storedDays = account.passDailyClaimDates && typeof account.passDailyClaimDates === 'object'
+      ? account.passDailyClaimDates
+      : {};
+    const storedDay = typeof storedDays[passId] === 'string' ? storedDays[passId] : '';
+    const legacy = localStorage.getItem(`${LEGACY_DAILY_KEYS[passId]}${currentUser}`);
+    const legacyDay = legacy ? getPolishDayKey(new Date(legacy)) : '';
+    return storedDay > legacyDay ? storedDay : legacyDay;
+  }
+
+  function getDailyClaimState(account, passId) {
+    const parts = getPolishDateParts();
+    const today = `${parts.year}-${parts.month}-${parts.day}`;
+    if (Number(parts.hour) < 7) return { available: false, message: 'NAGRODA DOSTĘPNA CODZIENNIE OD 07:00 CZASU POLSKIEGO' };
+    if (getLastClaimDay(account, passId) === today) return { available: false, message: 'DZISIEJSZA NAGRODA ZOSTAŁA JUŻ ODEBRANA' };
+    return { available: true, message: 'NAGRODA JEST GOTOWA DO ODBIORU' };
+  }
+
+  function normalizePassAccount(account) {
+    const before = JSON.stringify(account);
+    const passIds = Object.keys(PASS_PRICES);
+    const legacyActivePasses = passIds.filter(id => account[id] === true);
+    const ownedPass = Array.isArray(account.ownedPass)
+      ? Array.from(new Set(account.ownedPass.filter(id => PASS_PRICES[id])))
+      : legacyActivePasses;
+    if (!ownedPass.length && legacyActivePasses.length) ownedPass.push(...legacyActivePasses);
+    account.ownedPass = ownedPass;
+    if (!ownedPass.includes(account.activePass)) account.activePass = legacyActivePasses.find(id => ownedPass.includes(id)) || '';
+    passIds.forEach(id => { account[id] = account.activePass === id; });
+    if (JSON.stringify(account) !== before) persistPlayerData();
+  }
 
   // ============================================================
   // FUNKCJA KUPNA KARNETU (WYWOŁYWANA PRZY KUPNIE)
@@ -3128,7 +3054,9 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
 
   function updatePassShop() {
     const account = currentUser ? playerData[currentUser] : null;
+    if (account) normalizePassAccount(account);
     let hasOwnedPass = false;
+    if (ownedOnly && selectedPassId && !account?.ownedPass?.includes(selectedPassId)) selectedPassId = '';
     document.querySelectorAll('[data-pass]').forEach(button => {
       const passId = button.dataset.pass;
       const owned = account?.ownedPass?.includes(passId);
@@ -3136,11 +3064,131 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       hasOwnedPass ||= Boolean(owned);
       button.classList.toggle('hidden', ownedOnly && !owned);
       button.classList.toggle('active', active);
-      button.querySelector('span').textContent = active ? 'AKTYWNY' : owned ? 'POSIADANY // UŻYJ' : `${PASS_PRICES[passId].toLocaleString('pl-PL')} MONET`;
+      button.classList.toggle('selected', selectedPassId === passId);
+      button.querySelector('span').textContent = active ? 'AKTYWNY' : owned ? 'POSIADANY' : `${PASS_PRICES[passId].toLocaleString('pl-PL')} MONET`;
     });
     document.getElementById('passOwnedEmpty')?.classList.toggle('hidden', !ownedOnly || hasOwnedPass);
+    updatePassDetails();
   }
   window.updatePassShop = updatePassShop;
+
+  function updatePassDetails() {
+    const details = document.getElementById('passDetails');
+    const actions = document.getElementById('passActions');
+    const title = document.getElementById('passDetailsTitle');
+    const benefits = document.getElementById('passBenefits');
+    const dailyStatus = document.getElementById('passDailyStatus');
+    const account = currentUser ? playerData[currentUser] : null;
+    const passId = selectedPassId;
+    if (!details || !actions || !title || !benefits || !dailyStatus || !account || !PASS_PRICES[passId]) {
+      details?.classList.add('hidden');
+      return;
+    }
+
+    details.classList.remove('hidden');
+    const owned = Array.isArray(account.ownedPass) && account.ownedPass.includes(passId);
+    const active = account.activePass === passId;
+    const rewardAmount = PASS_DAILY_REWARDS[passId];
+    title.textContent = `${PASS_NAMES[passId]}${active ? ' // AKTYWNY' : ''}`;
+    benefits.replaceChildren();
+    [
+      `POSTAĆ Z KARNETU: ${PASS_BENEFITS[passId].character}`,
+      `SKIN Z KARNETU: ${PASS_BENEFITS[passId].skin}`,
+      `MNOŻNIK ZAROBKÓW: ${PASS_BENEFITS[passId].multiplier}`,
+      `CODZIENNA NAGRODA: +${rewardAmount.toLocaleString('pl-PL')} MONET`
+    ].forEach(text => {
+      const item = document.createElement('li');
+      item.textContent = text;
+      benefits.appendChild(item);
+    });
+    actions.innerHTML = '';
+
+    if (!owned) {
+      dailyStatus.textContent = 'Kup karnet, aby odblokować jego codzienną nagrodę.';
+      actions.innerHTML = '<button type="button" data-pass-action="buy">KUP KARNET</button>';
+      return;
+    }
+
+    const claimState = active ? getDailyClaimState(account, passId) : null;
+    dailyStatus.textContent = active ? claimState.message : 'Załóż ten karnet, aby odbierać jego codzienną nagrodę.';
+    actions.innerHTML = `
+      <button type="button" data-pass-action="${active ? 'unequip' : 'equip'}">${active ? 'ZDEJMIJ KARNET' : 'ZAŁÓŻ KARNET'}</button>
+      ${active ? `<button type="button" data-pass-action="claim" ${claimState.available ? '' : 'disabled'}>ODBIERZ NAGRODĘ</button>` : ''}
+      <button type="button" class="danger" data-pass-action="sell">SPRZEDAJ ZA ${Math.floor(PASS_PRICES[passId] * .75).toLocaleString('pl-PL')} MONET</button>
+    `;
+  }
+
+  window.selectPass = function (passId) {
+    if (!PASS_PRICES[passId]) return;
+    selectedPassId = passId;
+    updatePassShop();
+  };
+
+  window.handlePassAction = function (action) {
+    const passId = selectedPassId;
+    if (!currentUser || !PASS_PRICES[passId]) return;
+    const account = playerData[currentUser] ||= {};
+    const ownedPass = Array.isArray(account.ownedPass) ? account.ownedPass : [];
+
+    if (action === 'buy' && !ownedPass.includes(passId)) {
+      window.buyPass(passId);
+      return;
+    }
+    if (action === 'equip' && ownedPass.includes(passId)) {
+      account.activePass = passId;
+      ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = id === passId; });
+      persistPlayerData();
+      window.grantPassCharacter?.(passId);
+      document.getElementById('passShopStatus').textContent = `ZAŁOŻONO KARNET ${PASS_NAMES[passId]}`;
+      updatePassShop();
+      return;
+    }
+    if (action === 'unequip' && account.activePass === passId) {
+      account.activePass = '';
+      ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = false; });
+      persistPlayerData();
+      document.getElementById('passShopStatus').textContent = `ZDJĘTO KARNET ${PASS_NAMES[passId]}`;
+      updatePassShop();
+      return;
+    }
+    if (action === 'sell' && ownedPass.includes(passId)) {
+      const refund = Math.floor(PASS_PRICES[passId] * .75);
+      if (!confirm(`Czy sprzedać karnet ${PASS_NAMES[passId]} za ${refund.toLocaleString('pl-PL')} monet?`)) return;
+      account.ownedPass = ownedPass.filter(id => id !== passId);
+      if (account.activePass === passId) {
+        account.activePass = '';
+        ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = false; });
+      }
+      coins += refund;
+      persistCoins();
+      persistPlayerData();
+      document.getElementById('passShopStatus').textContent = `SPRZEDANO KARNET ${PASS_NAMES[passId]} ZA ${refund.toLocaleString('pl-PL')} MONET`;
+      updatePassShop();
+      return;
+    }
+    if (action === 'claim' && ownedPass.includes(passId) && account.activePass === passId) {
+      const claimState = getDailyClaimState(account, passId);
+      if (!claimState.available) {
+        document.getElementById('passShopStatus').textContent = claimState.message;
+        updatePassShop();
+        return;
+      }
+      const parts = getPolishDateParts();
+      account.passDailyClaimDates = account.passDailyClaimDates && typeof account.passDailyClaimDates === 'object'
+        ? account.passDailyClaimDates
+        : {};
+      account.passDailyClaimDates[passId] = `${parts.year}-${parts.month}-${parts.day}`;
+      coins += PASS_DAILY_REWARDS[passId];
+      persistCoins();
+      persistPlayerData();
+      document.getElementById('passShopStatus').textContent = `ODEBRANO +${PASS_DAILY_REWARDS[passId].toLocaleString('pl-PL')} MONET ZA KARNET ${PASS_NAMES[passId]}`;
+      updatePassShop();
+    }
+  };
+
+  setInterval(() => {
+    if (selectedPassId) updatePassDetails();
+  }, 30000);
 
   window.buyPass = function (passId) {
     const price = PASS_PRICES[passId];
@@ -3155,6 +3203,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = id === passId; });
       persistPlayerData();
       window.grantPassCharacter?.(passId);
+      selectedPassId = passId;
       updatePassShop();
       document.getElementById('passShopStatus').textContent = `${PASS_NAMES[passId]} JEST TERAZ AKTYWNY`;
       return;
@@ -3181,11 +3230,14 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     persistCoins();
     persistPlayerData();
     window.grantPassCharacter?.(passId);
+    selectedPassId = passId;
     updatePassShop();
     document.getElementById('passShopStatus').textContent = sellActive
       ? `SPRZEDANO ${PASS_NAMES[activePass]} I AKTYWOWANO ${PASS_NAMES[passId]}`
       : `KUPIONO ${PASS_NAMES[passId]}${account.activePass === passId ? ' // AKTYWNY' : ''}`;
   };
+
+  updatePassShop();
 
 })();
 // === ARCANNA PASS FIXES (NO DUPLICATE CHARACTERS) ===
