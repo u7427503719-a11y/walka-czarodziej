@@ -1,3 +1,4 @@
+//html
 <!doctype html>
 <html lang="pl">
 <head>
@@ -100,6 +101,10 @@
         <button id="profileClose" class="shop-close" type="button">X</button>
         <div class="eyebrow">PROFIL GRACZA</div>
         <h3 id="profileName">PROFIL</h3>
+        <div class="profile-ranking-actions">
+          <button id="openRankingsButton" type="button">TOPKI</button>
+          <button id="leaderboardButton" type="button">RANKING MIESIĄCA <span>TOP 5</span></button>
+        </div>
         <canvas id="avatarDrawCanvas" width="280" height="280" aria-label="Rysunek avatara"></canvas>
         <div class="profile-actions"><button id="avatarClear" type="button">WYCZYŚĆ RYSUNEK</button><button id="avatarSave" type="button">ZAPISZ AVATAR</button></div>
         <section class="profile-account-controls">
@@ -232,6 +237,7 @@
             <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="illusionist">ILUZJONER</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
             <div class="owner-row"><input id="ownerPassword" type="password" autocomplete="current-password" placeholder="HASŁO WŁAŚCICIELA"><button id="verifyOwnerPasswordButton" type="button">SPRAWDŹ HASŁO</button></div>
             <div class="owner-row"><button id="grantOctoberButton" class="hidden" type="button">NADAJ PAŹDZIERNIKA</button></div>
+            <div class="owner-row"><button id="resetRankingButton" class="hidden" type="button">RESETUJ RANGI GRACZY</button></div>
             <div class="owner-row"><button id="resetAccountButton">ZERUJ KONTO GRACZA</button></div>
             <div class="owner-message" id="ownerMessage"></div>
           </div>
@@ -242,7 +248,6 @@
           <button id="ownedButton" class="shop-button">POSIADANI</button>
           <button id="friendsButton" class="shop-button" type="button">ZNAJOMI</button>
           <button id="dailyMissionButton" class="shop-button" type="button">MISJE DNIA <span id="dailyMissionBadge">0/5</span></button>
-          <button id="leaderboardButton" class="shop-button" type="button">RANKING MIESIĄCA <span>TOP 5</span></button>
           <button id="musicButton" class="shop-button" type="button">MUZYKA: WŁĄCZ</button>
         </div>
         <div class="shop-modal hidden" id="shop">
