@@ -116,65 +116,64 @@ const chests = {
 };
 const keychains = { 'strength-charm': { name: 'TALIZMAN SIŁY', rarity: 'LEGENDARNY', damageMultiplier: 1.2 }, 'damage-charm': { name: 'BRELOK MOCY', rarity: 'NIEZWYKŁY', damageMultiplier: 1.005 }, 'vitality-charm': { name: 'SERCE ARENY', rarity: 'RZADKI', healthPercent: .1 }, 'life-charm': { name: 'KAMIEŃ ŻYCIA', rarity: 'NIEZWYKŁY', healthBonus: 10 }, 'ward-charm': { name: 'RUNICZNA OSŁONA', rarity: 'RZADKI', damageReduction: .1 }, 'owner-charm': { name: 'ZNAK WŁAŚCICIELA', rarity: 'MITYCZNY', damageMultiplier: 1.2, damageReduction: .15 }, 'admin-charm': { name: 'ODZNAKA ADMINA', rarity: 'EPICKI', damageMultiplier: 1.07, damageReduction: .1 } };
 const hats = { 'strength-hat': { name: 'KAPELUSZ MOCY', rarity: 'LEGENDARNY', damageMultiplier: 1.05, symbol: '♛' }, 'guard-hat': { name: 'KAPELUSZ STRAŻNIKA', rarity: 'RZADKI', damageReduction: .05, symbol: '◆' }, 'light-hat': { name: 'LEKKA OSŁONA', rarity: 'NIEZWYKŁY', damageReduction: .025, symbol: '◇' } };
-const passSkins = {
-  'vip-electric': { name: 'ELEKTRYCZNY', pass: 'VIP', price: 25000, color: '#47b8ff', accent: '#c4f5ff' },
-  'svip-illusionist': { name: 'ILUZJONISTA', pass: 'SVIP', price: 62500, color: '#a16cff', accent: '#e1caff' },
-  'gvip-thunder': { name: 'PIORUN', pass: 'GVIP', price: 125000, color: '#ffb52e', accent: '#fff2a1' },
-  'premium-eagle': { name: 'WŁADCA ORŁÓW', pass: 'PREMIUM', price: 250000, color: '#f0ce55', accent: '#fff9d1' }
+const passCharacters = {
+  vip: { name: 'ELEKTRYCZNY', pass: 'VIP', wizardId: 'electric' },
+  svip: { name: 'ILUZJONISTA', pass: 'SVIP', wizardId: 'illusionist' },
+  gvip: { name: 'PIORUN', pass: 'GVIP', wizardId: 'thunder' },
+  premium: { name: 'WŁADCA ORŁÓW', pass: 'PREMIUM', wizardId: 'eaglelord' }
 };
-function getOwnedPassSkins() { return getMap('arcanaSkins')[currentUser.toLowerCase()] || []; }
-function getEquippedPassSkin() { const id = getMap('arcanaEquippedSkin')[currentUser.toLowerCase()] || ''; return getOwnedPassSkins().includes(id) && passSkins[id] ? id : ''; }
-function updatePassSkinShop() {
-  const owned = getOwnedPassSkins();
-  const equipped = getEquippedPassSkin();
-  const offers = document.getElementById('passSkinOffers');
+function getOwnedPassCharacters() {
+  const key = currentUser.toLowerCase();
+  const account = getAccounts()[key];
+  return Array.from(new Set([...(getMap('arcanaOwned')[key] || []), ...(account?.wizards || [])]));
+}
+function grantPassCharacter(passId) {
+  const character = passCharacters[passId];
+  if (!character || !currentUser) return;
+  const key = currentUser.toLowerCase();
+  const accounts = getAccounts();
+  const owned = getMap('arcanaOwned');
+  const wizardIds = Array.from(new Set([...(owned[key] || []), ...(accounts[key]?.wizards || []), character.wizardId]));
+  owned[key] = wizardIds;
+  if (accounts[key]) accounts[key].wizards = wizardIds;
+  saveMap('arcanaOwned', owned);
+  localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
+  updateShop();
+}
+function migrateOldPassCharacters() {
+  const key = currentUser.toLowerCase();
+  const previous = getMap('arcanaSkins');
+  const previousItems = Array.isArray(previous[key]) ? previous[key] : [];
+  const equippedId = getMap('arcanaEquippedSkin')[key];
+  previousItems.forEach(id => {
+    const passId = { 'vip-electric': 'vip', 'svip-illusionist': 'svip', 'gvip-thunder': 'gvip', 'premium-eagle': 'premium' }[id];
+    if (passId) grantPassCharacter(passId);
+  });
+  const equipped = passCharacters[{ 'vip-electric': 'vip', 'svip-illusionist': 'svip', 'gvip-thunder': 'gvip', 'premium-eagle': 'premium' }[equippedId]];
+  if (equipped) {
+    grantPassCharacter(equipped.pass.toLowerCase());
+    useWizard(equipped.wizardId);
+  }
+  delete previous[key];
+  saveMap('arcanaSkins', previous);
+  const equippedMap = getMap('arcanaEquippedSkin');
+  delete equippedMap[key];
+  saveMap('arcanaEquippedSkin', equippedMap);
+}
+function updatePassCharacterShop() {
+  const owned = getOwnedPassCharacters();
+  const offers = document.getElementById('passCharacterOffers');
   if (!offers) return;
-  offers.innerHTML = Object.entries(passSkins).filter(([id]) => !ownedOnly || owned.includes(id)).map(([id, skin]) => {
-    const isOwned = owned.includes(id);
-    const isEquipped = equipped === id;
-    return `<article class="skin-card ${isEquipped ? 'equipped' : ''}"><div class="skin-preview" style="--skin-color:${skin.color};--skin-accent:${skin.accent}"><span></span></div><b>${skin.name}</b><small>SKIN Z KARNETU ${skin.pass}</small><button type="button" data-skin-action="${isOwned ? 'equip' : 'buy'}" data-skin-id="${id}">${isEquipped ? 'ZAŁOŻONY' : isOwned ? 'ZAŁÓŻ' : `${skin.price.toLocaleString('pl-PL')} MONET // KUP`}</button></article>`;
+  offers.innerHTML = Object.values(passCharacters).filter(character => !ownedOnly || owned.includes(character.wizardId)).map(character => {
+    const wizard = wizards[character.wizardId];
+    const isOwned = owned.includes(character.wizardId);
+    const isSelected = selectedWizard === character.wizardId;
+    return `<article class="pass-character-card ${isSelected ? 'equipped' : ''}"><div class="pass-character-preview"><span></span></div><b>${character.name}</b><small>POSTAĆ Z KARNETU ${character.pass}</small><button type="button" data-character-action="${isOwned ? 'use' : 'buy'}" data-wizard-id="${character.wizardId}">${isSelected ? 'WYBRANA' : isOwned ? 'UŻYJ POSTACI' : `${wizard.cost.toLocaleString('pl-PL')} MONET // KUP`}</button></article>`;
   }).join('');
-  document.getElementById('passSkinEmpty')?.classList.toggle('hidden', !ownedOnly || owned.length > 0);
+  document.getElementById('passCharacterEmpty')?.classList.toggle('hidden', !ownedOnly || owned.length > 0);
 }
-window.refreshPassSkinShop = updatePassSkinShop;
-window.grantPassSkin = function (passId) {
-  const id = { vip: 'vip-electric', svip: 'svip-illusionist', gvip: 'gvip-thunder', premium: 'premium-eagle' }[passId];
-  if (!id || !currentUser) return;
-  const inventory = getMap('arcanaSkins');
-  inventory[currentUser.toLowerCase()] = [...new Set([...(inventory[currentUser.toLowerCase()] || []), id])];
-  saveMap('arcanaSkins', inventory);
-  const equipped = getMap('arcanaEquippedSkin');
-  equipped[currentUser.toLowerCase()] ||= id;
-  saveMap('arcanaEquippedSkin', equipped);
-  updatePassSkinShop();
-};
-function buyPassSkin(id) {
-  const skin = passSkins[id];
-  if (!currentUser || !skin) return;
-  const owned = getOwnedPassSkins();
-  if (owned.includes(id)) {
-    const equipped = getMap('arcanaEquippedSkin');
-    equipped[currentUser.toLowerCase()] = id;
-    saveMap('arcanaEquippedSkin', equipped);
-    updatePassSkinShop();
-    document.getElementById('passSkinStatus').textContent = `ZAŁOŻONO SKIN: ${skin.name}`;
-    return;
-  }
-  if (coins < skin.price) {
-    document.getElementById('passSkinStatus').textContent = `BRAKUJE ${Math.ceil(skin.price - coins).toLocaleString('pl-PL')} MONET`;
-    return;
-  }
-  const inventory = getMap('arcanaSkins');
-  inventory[currentUser.toLowerCase()] = [...new Set([...(inventory[currentUser.toLowerCase()] || []), id])];
-  saveMap('arcanaSkins', inventory);
-  const equipped = getMap('arcanaEquippedSkin');
-  equipped[currentUser.toLowerCase()] = id;
-  saveMap('arcanaEquippedSkin', equipped);
-  coins -= skin.price;
-  persistCoins();
-  updatePassSkinShop();
-  document.getElementById('passSkinStatus').textContent = `KUPIONO I ZAŁOŻONO SKIN: ${skin.name}`;
-}
+window.refreshPassCharacterShop = updatePassCharacterShop;
+window.grantPassCharacter = grantPassCharacter;
 function getKeychains() { return getMap('arcanaKeychains')[currentUser.toLowerCase()] || []; }
 function getEquippedKeychains() { return (getMap('arcanaEquipped')[currentUser.toLowerCase()] || []).filter(id => getKeychains().includes(id) && keychains[id]); }
 function getKeychainLevel(id) { return Number(getMap('arcanaKeychainLevels')[currentUser.toLowerCase()]?.[id] || 0); }
@@ -252,7 +251,7 @@ deleteAccountConfirmed = function () { const key = accountPendingDelete; if (key
 function saveAvatar() { if (!currentUser) return; const avatars = getMap('arcanaAvatars'); avatars[currentUser.toLowerCase()] = profileUi.editor.toDataURL('image/png'); saveMap('arcanaAvatars', avatars); drawAvatar(profileUi.avatar, avatars[currentUser.toLowerCase()], currentUser); setToast('AVATAR ZAPISANY'); }
 function accountCharm(id) { const inventory = getMap('arcanaKeychains'); inventory[id] = Array.from(new Set([...(inventory[id] || []), 'admin-charm'])); saveMap('arcanaKeychains', inventory); const equipped = getMap('arcanaEquipped'); equipped[id] = Array.from(new Set([...(equipped[id] || []), 'admin-charm'])).slice(0, 3); saveMap('arcanaEquipped', equipped); }
 function getCurrentTitle() { const id = getMap('arcanaSelectedTitle')[currentUser.toLowerCase()] || ''; return wizardTitles[id] || ''; }
-function getProfileDrop() { const key = currentUser.toLowerCase(); const enabled = Boolean(getMap('arcanaDropEnabled')[key]); const charm = getMap('arcanaDropCharm')[key]; return { nick: currentUser, role: getAccounts()[key]?.role || 'user', dropEnabled: enabled && getEquippedKeychains().includes(charm), dropCharm: charm, hatId: getEquippedHat(), wizardId: selectedWizard, skinId: getEquippedPassSkin(), title: getCurrentTitle(), damageMultiplier: getStrengthMultiplier(), damageReduction: getDamageReduction() }; }
+function getProfileDrop() { const key = currentUser.toLowerCase(); const enabled = Boolean(getMap('arcanaDropEnabled')[key]); const charm = getMap('arcanaDropCharm')[key]; return { nick: currentUser, role: getAccounts()[key]?.role || 'user', dropEnabled: enabled && getEquippedKeychains().includes(charm), dropCharm: charm, hatId: getEquippedHat(), wizardId: selectedWizard, title: getCurrentTitle(), damageMultiplier: getStrengthMultiplier(), damageReduction: getDamageReduction() }; }
 function syncProfileToServer() { if (matchSocket?.readyState === WebSocket.OPEN) sendNetwork({ type: 'profile-update', profile: getProfileDrop() }); }
 function clearAuthForm() {
   auth.registerNick.value = '';
@@ -263,7 +262,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -405,8 +404,8 @@ const originalResetAccount = resetAccount;
 resetAccount = function () { const key = ownerTarget(); const shouldClear = isOwner() && key !== OWNER_NICK.toLowerCase() && Boolean(getAccounts()[key]); originalResetAccount(); if (shouldClear) clearNewProgress(key); };
 function giveWizard() { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); const id = ownerUi.wizard.value; if (!accounts[key] || (id === 'overlord' && !isOwner())) { ownerResult('TYLKO WŁAŚCICIEL MOŻE NADAĆ WŁADCĘ'); return; } const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || accounts[key].wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${accounts[key].nick}`); }
 const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
-const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONER', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 },
- october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
+const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, electric: { name: 'ELEKTRYCZNY', cost: 25000, hp: 105, damage: 15, cooldown: .25, abilityType: 'lightning', abilityDamage: .55, abilityCooldown: 8 }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONISTA', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 }, eaglelord: { name: 'WŁADCA ORŁÓW', cost: 250000, hp: 145, damage: 18, cooldown: .28, speed: 1.3, abilityType: 'blink', abilityDamage: .45, abilityCooldown: 9 },
+ october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', electric: 'Władca Błyskawic', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', eaglelord: 'Władca Orlich Szczytów', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
 const botProfiles = [
   { wizardId: 'apprentice', difficulty: 1, reward: 100 },
   { wizardId: 'storm', difficulty: 2, reward: 160 },
@@ -668,7 +667,7 @@ function commitTrade() { if (!tradeState.partner || tradeState.accepted) return;
 function completeTrade(message) { applyTradeOffer(message.ownOffer.items || [], message.ownOffer.coins || 0, false); applyTradeOffer(message.receivedOffer.items || [], message.receivedOffer.coins || 0, true); tradeUi.status.textContent = 'WYMIANA ZAKOŃCZONA'; setToast('WYMIANA ZAKOŃCZONA'); setTimeout(() => tradeUi.modal.classList.add('hidden'), 900); }
 function showChatBubble(nick, text) { chatUi.bubble.textContent = `${nick}: ${text}`; chatUi.bubble.classList.remove('hidden'); const isOwn = nick.toLowerCase() === currentUser.toLowerCase(); chatUi.bubble.style.left = `${(isOwn ? p1.x : p2.x)}px`; chatUi.bubble.style.top = `${(isOwn ? p1.y : p2.y) - 72}px`; clearTimeout(showChatBubble.timer); showChatBubble.timer = setTimeout(() => chatUi.bubble.classList.add('hidden'), 5000); }
 function sendChat(text) { const clean = String(text || '').trim().slice(0, 120); if (!clean) return; if (onlineMatch) sendNetwork({ type: 'chat', text: clean }); else showChatBubble(currentUser, clean); chatUi.input.value = ''; chatUi.modal.classList.add('hidden'); }
-function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); window.refreshShopCollections?.(); window.updatePassShop?.(); window.refreshPassSkinShop?.(); }
+function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); window.refreshShopCollections?.(); window.updatePassShop?.(); window.refreshPassCharacterShop?.(); }
 function updatePrivateWizardCard() { let card = ui.shop.querySelector('.wizard-card[data-wizard="october"]'); if (card) return; card = document.createElement('button'); card.type = 'button'; card.className = 'wizard-card'; card.dataset.wizard = 'october'; const name = document.createElement('b'); name.textContent = wizards.october.name; const label = document.createElement('span'); label.textContent = 'TYLKO WŁAŚCICIEL'; card.append(name, label); card.addEventListener('click', () => openWizard('october')); ui.shop.querySelector('.wizard-offers').append(card); }
 function escapeHtml(value) { return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character])); }
 function updateFriends() { const key = currentUser.toLowerCase(); const friends = getMap('arcanaFriends')[key] || []; const requests = getMap('arcanaFriendRequests')[key] || []; ui.friendsList.innerHTML = friends.length ? friends.map(nick => `<div class="friend-item"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><button type="button" data-group-invite="${encodeURIComponent(nick)}">ZAPROŚ DO GRUPY</button></div>`).join('') : '<div class="friends-empty">BRAK ZNAJOMYCH</div>'; ui.suggestionsList.innerHTML = requests.length ? requests.map(nick => `<div class="friend-item friend-request"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><span class="friend-request-actions"><button type="button" data-accept="${encodeURIComponent(nick)}">✓</button><button type="button" data-reject="${encodeURIComponent(nick)}">X</button></span></div>`).join('') : '<div class="friends-empty">BRAK ZAPROSZEŃ</div>'; }
@@ -712,11 +711,6 @@ function draw() {
 }
 function drawMage(m, label) {
   if (m.invisible) return;
-  const skinId = m === p1 ? getEquippedPassSkin() : (m.skinId || (m === p2 ? opponentProfile.skinId : ''));
-  const skin = passSkins[skinId];
-  const useSkin = Boolean(skin);
-  const mageColor = useSkin ? skin.color : m.color;
-  const mageAccent = useSkin ? skin.accent : m.accent;
   ctx.save(); ctx.translate(m.x, m.y);
   const reflectTime = m === p1 ? p1.reflectShield : m === p2 ? p2.reflectShield : 0;
   const shieldTime = m === p1 ? p1.shield : 0;
@@ -731,12 +725,12 @@ function drawMage(m, label) {
   ctx.fillStyle = hpRatio > .6 ? '#6ce4b5' : hpRatio > .3 ? '#f6c76b' : '#ff7368'; ctx.fillRect(-barWidth / 2, -78, barWidth * hpRatio, 9);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.strokeRect(-barWidth / 2, -78, barWidth, 9);
   ctx.fillStyle = '#f4f7ff'; ctx.font = '700 9px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(`${Math.max(0, Math.ceil(m.hp || 0))}/${Math.ceil(m.maxHp || 1)}`, 0, -87);
-  ctx.shadowColor = mageColor; ctx.shadowBlur = 16; ctx.fillStyle = mageColor; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
+  ctx.shadowColor = m.color; ctx.shadowBlur = 16; ctx.fillStyle = m.color; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
   ctx.shadowBlur = 0; ctx.fillStyle = '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
   const hatId = m === p1 ? getEquippedHat() : (m.hatId || (m === p2 ? opponentProfile.hatId : ''));
   if (hats[hatId]) { ctx.fillStyle = hatId === 'strength-hat' ? '#ffcf67' : hatId === 'guard-hat' ? '#91d8ee' : '#d9d4f1'; ctx.beginPath(); ctx.moveTo(-20, -43); ctx.lineTo(-14, -58); ctx.lineTo(14, -58); ctx.lineTo(20, -43); ctx.closePath(); ctx.fill(); ctx.fillRect(-23, -44, 46, 5); }
-  ctx.strokeStyle = mageAccent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
-  ctx.fillStyle = mageAccent; ctx.font = '700 11px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(label, 0, 67); ctx.restore();
+  ctx.strokeStyle = m.accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
+  ctx.fillStyle = m.accent; ctx.font = '700 11px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(label, 0, 67); ctx.restore();
 }
 function updateDeviceControls() { document.getElementById('touchControls').classList.toggle('hidden', deviceMode !== 'mobile' || !running); chatUi.button.classList.toggle('hidden', !running); document.getElementById('touchCast').textContent = selectedWizard === 'hercules' ? 'PIĘŚĆ' : 'STRZAŁ'; }
 function resetJoystick() { joystickX = 0; joystickY = 0; keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false; document.getElementById('joystickKnob').style.transform = 'translate(-50%, -50%)'; }
@@ -1200,7 +1194,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     <button data-shop="keychains">BRELOCZKI</button>
     <button data-shop="hats">KAPELUSZE</button>
     <button data-shop="passes">KARNETY</button>
-    <button data-shop="skins">SKINY</button>
+    <button data-shop="passCharacters">POSTACIE KARNETOWE</button>
   `;
 
   // Wstawiamy zakładki na górę sklepu
@@ -1211,18 +1205,18 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const keychainsSection = document.createElement('div');
   const hatsSection = document.createElement('div');
   const passesSection = document.createElement('div');
-  const skinsSection = document.createElement('div');
+  const passCharactersSection = document.createElement('div');
 
   charactersSection.id = 'shopCharacters';
   keychainsSection.id = 'shopKeychains';
   hatsSection.id = 'shopHats';
   passesSection.id = 'shopPasses';
-  skinsSection.id = 'shopSkins';
+  passCharactersSection.id = 'shopPassCharacters';
 
   const wizardOffers = shopWindow.querySelector('.wizard-offers');
   const wizardDetail = shopWindow.querySelector('.wizard-detail');
   const passShop = shopWindow.querySelector('.pass-shop');
-  skinsSection.innerHTML = `<section class="pass-skin-shop" aria-labelledby="passSkinTitle"><div class="eyebrow">ARCANE MARKET / SKINY KARNETOWE</div><h4 id="passSkinTitle">SKINY Z KARNETÓW</h4><div id="passSkinOffers" class="skin-grid"></div><div id="passSkinStatus" class="pass-shop-status" role="status"></div><p id="passSkinEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH SKINÓW</p></section>`;
+  passCharactersSection.innerHTML = `<section class="pass-character-shop" aria-labelledby="passCharacterTitle"><div class="eyebrow">ARCANE MARKET / NAGRODY KARNETÓW</div><h4 id="passCharacterTitle">POSTACIE Z KARNETÓW</h4><div id="passCharacterOffers" class="pass-character-grid"></div><p id="passCharacterEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH POSTACI Z KARNETÓW</p></section>`;
   const ownedEmpty = document.createElement('p');
   ownedEmpty.className = 'shop-owned-empty hidden';
   ownedEmpty.textContent = 'BRAK POSIADANYCH PRZEDMIOTÓW W TEJ KATEGORII';
@@ -1238,13 +1232,13 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   shopWindow.appendChild(keychainsSection);
   shopWindow.appendChild(hatsSection);
   shopWindow.appendChild(passesSection);
-  shopWindow.appendChild(skinsSection);
+  shopWindow.appendChild(passCharactersSection);
 
   // Domyślnie widoczna sekcja POSTACIE
   keychainsSection.style.display = 'none';
   hatsSection.style.display = 'none';
   passesSection.style.display = 'none';
-  skinsSection.style.display = 'none';
+  passCharactersSection.style.display = 'none';
 
   // Obsługa przełączania zakładek
   tabs.addEventListener('click', (e) => {
@@ -1254,15 +1248,17 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     e.target.classList.add('active');
 
     const mode = e.target.dataset.shop;
-    const sections = { characters: charactersSection, keychains: keychainsSection, hats: hatsSection, passes: passesSection, skins: skinsSection };
+    const sections = { characters: charactersSection, keychains: keychainsSection, hats: hatsSection, passes: passesSection, passCharacters: passCharactersSection };
     Object.entries(sections).forEach(([name, section]) => { section.style.display = name === mode ? 'block' : 'none'; });
     if (mode === 'passes') window.updatePassShop?.();
-    if (mode === 'skins') window.refreshPassSkinShop?.();
+    if (mode === 'passCharacters') window.refreshPassCharacterShop?.();
   });
-  skinsSection.addEventListener('click', event => {
-    const button = event.target.closest('[data-skin-action]');
+  passCharactersSection.addEventListener('click', event => {
+    const button = event.target.closest('[data-character-action]');
     if (!button) return;
-    buyPassSkin(button.dataset.skinId);
+    if (button.dataset.characterAction === 'buy') buyWizard(button.dataset.wizardId);
+    else useWizard(button.dataset.wizardId);
+    window.refreshPassCharacterShop?.();
     syncProfileToServer();
   });
 
@@ -1285,7 +1281,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const updateBackpackAndShop = updateBackpack;
   updateBackpack = function () { updateBackpackAndShop(); window.refreshShopCollections(); };
   window.refreshShopCollections();
-  window.refreshPassSkinShop?.();
+  window.refreshPassCharacterShop?.();
   [keychainsSection, hatsSection].forEach(section => section.addEventListener('click', event => {
     const equip = event.target.closest('[data-equip]');
     const combine = event.target.closest('[data-combine]');
@@ -3083,7 +3079,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       account.activePass = passId;
       ['vip', 'svip', 'gvip', 'premium'].forEach(id => { account[id] = id === passId; });
       persistPlayerData();
-      window.grantPassSkin?.(passId);
+      window.grantPassCharacter?.(passId);
       updatePassShop();
       document.getElementById('passShopStatus').textContent = `${PASS_NAMES[passId]} JEST TERAZ AKTYWNY`;
       return;
@@ -3109,7 +3105,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     coins = availableCoins - price;
     persistCoins();
     persistPlayerData();
-    window.grantPassSkin?.(passId);
+    window.grantPassCharacter?.(passId);
     updatePassShop();
     document.getElementById('passShopStatus').textContent = sellActive
       ? `SPRZEDANO ${PASS_NAMES[activePass]} I AKTYWOWANO ${PASS_NAMES[passId]}`
