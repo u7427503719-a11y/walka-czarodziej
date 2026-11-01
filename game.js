@@ -41,6 +41,9 @@ const PREVIOUS_OWNER_NICKS = ['adam1', 'adam1właściciel', 'adam2właściciel']
 const OWNER_PASSWORD = 'admin123';
 const OWNER_NICKS = [OWNER_NICK];
 let currentUser = '';
+let sessionPassword = '';
+let progressSyncTimer = 0;
+let progressSyncQueue = Promise.resolve();
 let logoutIntentional = false, opponentProfile = {}, matchRewardGranted = false, matchWinRecorded = false, avatarDrawing = false, accountPendingDelete = '';
 function toggleOwnerPanel(forceCollapse) {
   const collapsed = typeof forceCollapse === 'boolean' ? forceCollapse : !ownerUi.panel.classList.contains('collapsed');
@@ -48,15 +51,80 @@ function toggleOwnerPanel(forceCollapse) {
   ownerUi.toggle.textContent = collapsed ? 'ROZWIŃ' : 'ZWIŃ';
 }
 function getAccounts() { return JSON.parse(localStorage.getItem('arcanaAccounts') || '{}'); }
+const progressMapNames = [
+  'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
+  'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
+  'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
+  'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
+  'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
+];
 function findLocalAccountEntryByNick(nick) {
   const normalized = String(nick || '').trim().toLowerCase();
   if (!normalized) return null;
   const accounts = getAccounts();
   return Object.entries(accounts).find(([key, account]) => key === normalized || String(account?.nick || '').trim().toLowerCase() === normalized) || null;
 }
-async function authRequest(action, data) { let response; try { response = await fetch(`/api/auth/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); } catch { throw new Error('BRAK POŁĄCZENIA Z SERWEREM // OTWÓRZ GRĘ Z ADRESU KOMPUTERA'); } let result; try { result = await response.json(); } catch { throw new Error('NIEPRAWIDŁOWA ODPOWIEDŹ SERWERA'); } if (!response.ok) throw new Error(result.error || 'BŁĄD LOGOWANIA'); return result.account; }
+async function authRequest(action, data, includeResponse = false) { let response; try { response = await fetch(`/api/auth/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); } catch { throw new Error('BRAK POŁĄCZENIA Z SERWEREM // OTWÓRZ GRĘ Z ADRESU KOMPUTERA'); } let result; try { result = await response.json(); } catch { throw new Error('NIEPRAWIDŁOWA ODPOWIEDŹ SERWERA'); } if (!response.ok) throw new Error(result.error || 'BŁĄD LOGOWANIA'); return includeResponse ? result : result.account; }
 function getMap(name) { return JSON.parse(localStorage.getItem(name) || '{}'); }
-function saveMap(name, value) { localStorage.setItem(name, JSON.stringify(value)); }
+function saveMap(name, value) { localStorage.setItem(name, JSON.stringify(value)); if (progressMapNames.includes(name)) scheduleProgressSync(); }
+function collectAccountProgress(nick) {
+  const key = nick.toLowerCase();
+  const maps = {};
+  for (const name of progressMapNames) {
+    const map = getMap(name);
+    if (Object.prototype.hasOwnProperty.call(map, key)) maps[name] = map[key];
+  }
+  const account = getAccounts()[key];
+  return { account: { coins: Number(account?.coins ?? getMap('arcanaBalances')[key] ?? 0) || 0 }, maps };
+}
+function hasAccountProgress(progress) {
+  return Number(progress?.account?.coins) > 0 ||
+    Object.values(progress?.maps || {}).some(map => map && Object.keys(map).length > 0);
+}
+function applyAccountProgress(nick, progress) {
+  const key = nick.toLowerCase();
+  for (const name of progressMapNames) {
+    const map = getMap(name);
+    if (Object.prototype.hasOwnProperty.call(progress?.maps || {}, name)) map[key] = progress.maps[name];
+    else delete map[key];
+    saveMap(name, map);
+  }
+}
+function scheduleProgressSync() {
+  if (!currentUser || !sessionPassword) return;
+  const nick = currentUser;
+  const password = sessionPassword;
+  const progress = collectAccountProgress(nick);
+  clearTimeout(progressSyncTimer);
+  progressSyncTimer = setTimeout(() => {
+    progressSyncQueue = progressSyncQueue
+      .then(() => authRequest('sync-progress', { nick, password, progress }))
+      .catch(error => {
+        console.error('Nie udało się zsynchronizować postępów:', error);
+        setToast('NIE UDAŁO SIĘ ZAPISAĆ POSTĘPÓW NA SERWERZE');
+      });
+  }, 500);
+}
+function flushProgressSync() {
+  if (!currentUser || !sessionPassword) return;
+  clearTimeout(progressSyncTimer);
+  const body = JSON.stringify({
+    nick: currentUser,
+    password: sessionPassword,
+    progress: collectAccountProgress(currentUser)
+  });
+  fetch('/api/auth/sync-progress', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body,
+    keepalive: true
+  }).then(async response => {
+    if (response.ok) return;
+    let result;
+    try { result = await response.json(); } catch { result = null; }
+    throw new Error(result?.error || `BŁĄD ZAPISU POSTĘPÓW (${response.status})`);
+  }).catch(error => console.error('Nie udało się wysłać postępów na serwer:', error));
+}
 function ensureOwnerAccount() {
   let accounts = getAccounts();
   const key = OWNER_NICK.toLowerCase();
@@ -240,7 +308,7 @@ function openProfile() { const key = currentUser.toLowerCase(); profileUi.name.t
 function recordWizardWin() { if (matchWinRecorded || !currentUser) return; matchWinRecorded = true; const key = currentUser.toLowerCase(); const wins = getMap('arcanaWizardWins'); wins[key] ||= {}; const previous = Number(wins[key][selectedWizard] || 0); wins[key][selectedWizard] = previous + 1; saveMap('arcanaWizardWins', wins); if (previous < 500 && wins[key][selectedWizard] >= 500) setToast(`TYTUŁ ODBLOKOWANY: ${wizardTitles[selectedWizard]}`); updateTitleChoices(); connectMatchSocket(() => sendNetwork({ type: 'career-win' })); }
 function moveAccountData(oldNick, newNick) { const oldKey = oldNick.toLowerCase(); const newKey = newNick.toLowerCase(); const accounts = getAccounts(); const account = accounts[oldKey] || {}; delete accounts[oldKey]; account.nick = newNick; accounts[newKey] = account; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels', 'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle'].forEach(name => { const map = getMap(name); if (Object.hasOwn(map, oldKey)) { map[newKey] = map[oldKey]; delete map[oldKey]; saveMap(name, map); } }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); if (map[oldKey]) { map[newKey] = map[oldKey]; delete map[oldKey]; } Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).map(nick => nick.toLowerCase() === oldKey ? newNick : nick); }); saveMap(name, map); }); }
 async function changeAccountNick(event) { event.preventDefault(); const oldNick = document.getElementById('changeNickCurrent').value.trim(); const newNick = document.getElementById('changeNickNew').value.trim(); const message = document.getElementById('nickChangeMessage'); message.textContent = ''; if (onlineMatch || running) { message.textContent = 'ZAKOŃCZ MECZ PRZED ZMIANĄ NICKU'; return; } if (oldNick.toLowerCase() !== currentUser.toLowerCase()) { message.textContent = 'WPISZ SWÓJ OBECNY NICK'; return; } try { const remote = await authRequest('change-nick', { currentNick: currentUser, currentPassword: document.getElementById('changeNickPassword').value, newNick }); moveAccountData(currentUser, remote.nick); currentUser = remote.nick; localStorage.setItem('arcanaCurrentUser', currentUser); ui.playerName.textContent = `GRACZ: ${currentUser}`; profileUi.name.textContent = currentUser; document.getElementById('changeNickCurrent').value = ''; document.getElementById('changeNickPassword').value = ''; document.getElementById('changeNickNew').value = ''; updateFriends(); updateAccountDirectory(); if (matchSocket) { matchSocket.close(); matchSocket = null; } message.textContent = 'NICK ZMIENIONY'; } catch (error) { message.textContent = error.message; } }
-async function changeAccountPassword(event) { event.preventDefault(); const message = document.getElementById('passwordChangeMessage'); message.textContent = ''; const newPassword = document.getElementById('changePasswordNew').value; if (newPassword !== document.getElementById('changePasswordRepeat').value) { message.textContent = 'NOWE HASŁA NIE SĄ TAKIE SAME'; return; } try { await authRequest('change-password', { currentNick: currentUser, currentPassword: document.getElementById('changePasswordCurrent').value, newPassword, confirmPassword: document.getElementById('changePasswordRepeat').value }); const accounts = getAccounts(); accounts[currentUser.toLowerCase()].serverSynced = true; delete accounts[currentUser.toLowerCase()].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); profileUi.passwordForm.reset(); message.textContent = 'HASŁO ZMIENIONE'; } catch (error) { message.textContent = error.message; } }
+async function changeAccountPassword(event) { event.preventDefault(); const message = document.getElementById('passwordChangeMessage'); message.textContent = ''; const newPassword = document.getElementById('changePasswordNew').value; if (newPassword !== document.getElementById('changePasswordRepeat').value) { message.textContent = 'NOWE HASŁA NIE SĄ TAKIE SAME'; return; } try { await authRequest('change-password', { currentNick: currentUser, currentPassword: document.getElementById('changePasswordCurrent').value, newPassword, confirmPassword: document.getElementById('changePasswordRepeat').value }); sessionPassword = newPassword; const accounts = getAccounts(); accounts[currentUser.toLowerCase()].serverSynced = true; delete accounts[currentUser.toLowerCase()].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); profileUi.passwordForm.reset(); message.textContent = 'HASŁO ZMIENIONE'; } catch (error) { message.textContent = error.message; } }
 function updateAccountDirectory() { const accounts = getAccounts(); const entries = Object.entries(accounts).filter(([, account]) => account?.nick).sort((left, right) => left[1].nick.localeCompare(right[1].nick)); accountUi.list.innerHTML = entries.map(([key, account]) => `<button type="button" data-account-view="${encodeURIComponent(key)}">${escapeHtml(account.nick)}</button>`).join('') || '<span class="friends-empty">BRAK KONT</span>'; }
 function showAccountDetails(key) { const account = getAccounts()[key]; if (!account) return; const balances = getMap('arcanaBalances'); const coinsForAccount = Number(balances[key] ?? account.coins ?? 0); const owned = Array.from(new Set(['apprentice', ...(account.wizards || []), ...(getMap('arcanaOwned')[key] || [])])); accountUi.name.textContent = account.nick; accountUi.coins.textContent = `MONETY: ${coinsForAccount}`; accountUi.characters.textContent = `POSTACIE: ${owned.map(id => wizards[id]?.name || id).join(', ')}`; accountUi.delete.disabled = key === OWNER_NICK.toLowerCase(); accountPendingDelete = key; accountUi.details.classList.remove('hidden'); }
 function requestAccountDelete() { if (!accountPendingDelete || accountPendingDelete === OWNER_NICK.toLowerCase()) return; accountUi.confirm.classList.remove('hidden'); }
@@ -298,7 +366,9 @@ function logoutAccount() {
     accounts[key].coins = balances[key];
     localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
   }
+  flushProgressSync();
   currentUser = '';
+  sessionPassword = '';
   syncAccountRoleUi();
   ui.playerName.textContent = '';
   profileUi.button.classList.add('hidden');
@@ -333,7 +403,9 @@ function applyInactivePenalty() {
   coins = nextBalance;
   localStorage.setItem('arcanaCoins', String(nextBalance));
   setToast('-300 MONET ZA NIEWYLOGOWANIE');
+  flushProgressSync();
   currentUser = '';
+  sessionPassword = '';
   syncAccountRoleUi();
   ui.playerName.textContent = '';
   profileUi.button.classList.add('hidden');
@@ -373,8 +445,8 @@ function normalizeLocalAccount(rawAccount = {}, fallbackNick = '') {
   normalized.serverSynced = true;
   return normalized;
 }
-async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); auth.registerNickError.textContent = ''; if (findLocalAccountEntryByNick(nick)) { auth.registerNickError.textContent = 'TAKIE KONTO JUŻ ISTNIEJE'; return; } try { const remote = await authRequest('register', { nick, password: auth.registerPassword.value }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.registerNickError.textContent = error.message; } }
-async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const remote = await authRequest('login', { nick, password }); const accountKey = remote.nick.toLowerCase(); const merged = normalizeLocalAccount({ ...(accounts[accountKey] || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [], coins: Number(accounts[accountKey]?.coins ?? 0) }, remote.nick); accounts[accountKey] = merged; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); finishAuth(remote.nick); } catch (error) { auth.loginError.textContent = error.message; } }
+async function registerAccount(event) { event.preventDefault(); const nick = auth.registerNick.value.trim(); const key = nick.toLowerCase(); const password = auth.registerPassword.value; auth.registerNickError.textContent = ''; if (findLocalAccountEntryByNick(nick)) { auth.registerNickError.textContent = 'TAKIE KONTO JUŻ ISTNIEJE'; return; } try { const remote = await authRequest('register', { nick, password }); clearLocalAccountProgress(key); const accounts = getAccounts(); accounts[key] = normalizeLocalAccount({ nick: remote.nick, role: remote.role, wizards: remote.wizards || [] }, remote.nick); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); sessionPassword = password; finishAuth(remote.nick); scheduleProgressSync(); } catch (error) { auth.registerNickError.textContent = error.message; } }
+async function loginAccount(event) { event.preventDefault(); const nick = auth.loginNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); const password = auth.loginPassword.value; auth.loginError.textContent = ''; if (getMap('arcanaBans')[key]) { auth.loginError.textContent = 'TO KONTO ZOSTAŁO ZBANOWANE'; return; } try { const login = await authRequest('login', { nick, password }, true); const remote = login.account; const accountKey = remote.nick.toLowerCase(); const localProgress = collectAccountProgress(remote.nick); const useLocalProgress = !login.progress || (!hasAccountProgress(login.progress) && hasAccountProgress(localProgress)); const activeProgress = useLocalProgress ? localProgress : login.progress; if (login.progress && !useLocalProgress) applyAccountProgress(remote.nick, login.progress); const merged = normalizeLocalAccount({ ...(accounts[accountKey] || {}), ...(activeProgress?.account || {}), nick: remote.nick, role: remote.role, wizards: remote.wizards || accounts[accountKey]?.wizards || [] }, remote.nick); accounts[accountKey] = merged; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (useLocalProgress) await authRequest('sync-progress', { nick: remote.nick, password, progress: localProgress }); sessionPassword = password; finishAuth(remote.nick); scheduleProgressSync(); } catch (error) { auth.loginError.textContent = error.message; } }
 function ownerTarget() { const key = ownerUi.target.value.trim().toLowerCase(); return key; }
 function ownerResult(text) { ownerUi.message.textContent = text; }
 function isOwner() { return OWNER_NICKS.includes(currentUser.toLowerCase()); }
@@ -845,6 +917,9 @@ ownerUi.verifyPassword.addEventListener('click', verifyOwnerPassword);
 ownerUi.grantOctober.addEventListener('click', grantOctoberWizard);
 ownerUi.resetRanking.addEventListener('click', resetRankedLadder);
 addEventListener('resize', resize); addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); resize(); reset(); updateShop(); requestAnimationFrame(frame);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') flushProgressSync();
+});
 auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth.loginTab.addEventListener('click', () => showAuthForm('login')); auth.registerForm.addEventListener('submit', registerAccount); auth.loginForm.addEventListener('submit', loginAccount); ui.logout.addEventListener('click', logoutAccount); ownerUi.toggle.addEventListener('click', () => toggleOwnerPanel()); ownerUi.addAdmin.addEventListener('click', addAdmin); ownerUi.ban.addEventListener('click', () => changeBan(true)); ownerUi.unban.addEventListener('click', () => changeBan(false)); ownerUi.giveCoins.addEventListener('click', giveCoins); ownerUi.giveWizard.addEventListener('click', giveWizard); ui.friendsButton.addEventListener('click', () => { setFriendsTab('friends'); ui.friendsModal.classList.remove('hidden'); ui.inviteMessage.textContent = ''; updateFriends(); }); ui.friendsTab.addEventListener('click', () => setFriendsTab('friends')); ui.requestsTab.addEventListener('click', () => setFriendsTab('requests')); ui.suggestionsTab.addEventListener('click', () => setFriendsTab('suggestions')); ui.friendsClose.addEventListener('click', () => ui.friendsModal.classList.add('hidden')); ui.sendInvite.addEventListener('click', sendFriendInvite); ui.suggestionsList.addEventListener('click', event => { const accept = event.target.closest('[data-accept]'); const reject = event.target.closest('[data-reject]'); if (accept) respondToFriendInvite(decodeURIComponent(accept.dataset.accept), true); if (reject) respondToFriendInvite(decodeURIComponent(reject.dataset.reject), false); }); addEventListener('beforeunload', applyInactivePenalty); addEventListener('pagehide', event => { if (!event.persisted) applyInactivePenalty(); }); ensureOwnerAccount(); showAuthForm('register');
 // === ARCANNA GLOBAL PATCH: OWNER, FRIENDS, TRADE ===
 // Ten blok możesz wkleić pod całym game.js. Nadpisuje stare funkcje.
