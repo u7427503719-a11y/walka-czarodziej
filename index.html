@@ -275,7 +275,18 @@
               <button class="wizard-card" data-wizard="october"><b>PAŹDZIERNIK</b><span>POSTAĆ SPECJALNA</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
-            <button id="chestsButton" class="chests-entry" type="button">OTWÓRZ SKRZYNIE <span>→</span></button>
+            <section class="pass-shop" aria-labelledby="passShopTitle">
+              <div class="eyebrow">ARCANE MARKET / KARNETY</div>
+              <h4 id="passShopTitle">KARNETY</h4>
+              <div class="pass-offers">
+                <button type="button" data-pass="vip"><b>VIP</b><span>100 000 MONET</span></button>
+                <button type="button" data-pass="svip"><b>SVIP</b><span>250 000 MONET</span></button>
+                <button type="button" data-pass="gvip"><b>GVIP</b><span>500 000 MONET</span></button>
+                <button type="button" data-pass="premium"><b>PREMIUM</b><span>1 000 000 MONET</span></button>
+              </div>
+              <div id="passShopStatus" class="pass-shop-status" role="status"></div>
+              <p id="passOwnedEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH KARNETÓW</p>
+            </section>
             <div class="wizard-detail hidden" id="wizardDetail">
               <div class="eyebrow">SZCZEGÓŁY POSTACI</div>
               <h4 id="wizardName">ISKRA</h4>
@@ -301,28 +312,26 @@
             <button class="shop-close" id="backpackClose" type="button">X</button>
             <div class="eyebrow">ARCANE INVENTORY / KOLEKCJA</div>
             <h3>PLECAK</h3>
-            <div class="backpack-empty">
-              <span class="backpack-icon">◇</span>
-              <strong>PUSTY PLECAK</strong>
-              <span>OTWÓRZ SKRZYNIĘ, ABY ZDOBYĆ BRELOCZKI</span>
-            </div>
-            <div class="hat-collection hidden" id="hatCollection"></div>
-            <div class="keychain-collection hidden" id="keychainCollection"></div>
+            <section class="backpack-category">
+              <div class="backpack-category-heading"><h4>BRELOCZKI</h4></div>
+              <div class="keychain-collection" id="keychainCollection"></div>
+            </section>
+            <section class="backpack-category">
+              <div class="backpack-category-heading"><h4>KAPELUSZE</h4></div>
+              <div class="hat-collection" id="hatCollection"></div>
+            </section>
+            <div class="backpack-result" id="backpackResult" role="status"></div>
           </div>
         </div>
         <div class="chest-modal hidden" id="chestModal">
           <div class="chest-window">
             <button class="shop-close" id="chestClose" type="button">X</button>
-            <div class="eyebrow">ARCANE MARKET / SKRZYNIE</div>
-            <h3>SKRZYNIE Z NAGRODAMI</h3>
-            <p class="chest-note">KAŻDA DZIENNA SKRZYNIA DAJE 100–1000 MONET ORAZ KAPELUSZ LUB BRELOCZEK (50% SZANSY NA KAŻDY RODZAJ).</p>
+            <div class="eyebrow">ARCANE MARKET / MISJE DNIA</div>
+            <h3>SKRZYNIA DZIENNA</h3>
+            <p class="chest-note">ZDOBĄDŹ SKRZYNIĘ ZA WYGRANIE POJEDYNKÓW. NAGRODA ZAWIERA MONETY I LOSOWY PRZEDMIOT.</p>
             <div class="daily-mission-panel">
               <div><strong id="dailyMissionProgress">WYGRANE DZISIAJ: 0/5</strong><span id="dailyBoxCount">DOSTĘPNE SKRZYNIE: 0/5</span><small id="dailyResetText">NOWE MISJE CODZIENNIE O 07:00 CZASU POLSKIEGO</small></div>
               <button id="dailyBoxOpenButton" type="button" disabled>OTWÓRZ SKRZYNIĘ DZIENNĄ</button>
-            </div>
-            <div class="chest-offers">
-              <button class="chest-card" data-chest="hats" type="button"><span class="chest-symbol">♛</span><b>SKRZYNIA KAPELUSZÓW</b><small>TYLKO KAPELUSZE</small><strong>OTWÓRZ</strong></button>
-              <button class="chest-card" data-chest="keychains" type="button"><span class="chest-symbol">◇</span><b>SKRZYNIA BRELOCZKÓW</b><small>TYLKO ZWYKŁE BRELOCZKI</small><strong>OTWÓRZ</strong></button>
             </div>
             <div class="chest-result" id="chestResult"></div>
           </div>
