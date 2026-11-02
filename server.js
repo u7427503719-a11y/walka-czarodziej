@@ -13,17 +13,23 @@ const rooms = new Map();
 const activeSocketsByNick = new Map();
 const sessionTokens = new Map();
 const activeSessionsByNick = new Map();
+const ownerLoginChallenges = new Map();
+const ownerLoginChallengesByNick = new Map();
 const groups = new Map();
 const tradeSessions = new Map();
 const randomQueues = new Map([['1v1', []], ['2v2', []], ['1v2', []], ['1v3', []]]);
-const rankedQueues = new Map([...randomQueues.keys()].map(matchType => [matchType, []]));
+const rankedQueues = new Map([['3v3', []]]);
 const rankedLeagues = ['DREWNO', 'KAMIEŃ', 'BRĄZ', 'ŻELAZO', 'WODA', 'LAWA', 'OBSYDIAN'];
 const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
 const restrictedOwnerNick = 'szymon';
-const ownerNicks = ['adam', 'szymon'];
+const superOwnerNick = '???';
+const ownerNicks = ['adam', 'szymon', superOwnerNick];
+const ownerChallengeQuestions = ['PODAJ LICZBĘ', 'KIEDY?', 'JAK?'];
+const ownerChallengeAnswers = ['3685', ['wresien', 'wrzesien'], 'normalnie'];
+const hiddenOwnerKey = superOwnerNick.toLowerCase();
 const progressMapNames = [
   'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
   'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
@@ -127,11 +133,33 @@ function writeAccounts(accounts) {
 
 function migrateOwnerAccount() {
   const accounts = readAccounts();
+  const superOwnerPassword = String(process.env.GAME_OVERLORD_PASSWORD || '');
+  if (superOwnerPassword && (superOwnerPassword.length < 4 || superOwnerPassword.length > 128)) {
+    throw new Error('GAME_OVERLORD_PASSWORD MUSI MIEĆ 4-128 ZNAKÓW');
+  }
   for (const nick of ownerNicks) {
-    const ownerEntry = findAccountEntry(accounts, nick);
-    if (!ownerEntry) throw new Error(`KONTO "${nick}" MUSI ISTNIEĆ PRZED NADANIEM ROLI WŁAŚCICIELA`);
-    const [storedOwnerKey, owner] = ownerEntry;
     const ownerKey = nick.toLowerCase();
+    let ownerEntry = findAccountEntry(accounts, nick);
+    if (nick === superOwnerNick && !superOwnerPassword) {
+      if (ownerEntry?.[1].provisionedByEnvironment !== true) {
+        if (ownerEntry) ownerEntry[1].role = 'user';
+        continue;
+      }
+      ownerEntry[1].role = 'owner';
+    }
+    if (nick === superOwnerNick && superOwnerPassword) {
+      if (!ownerEntry) {
+        accounts[ownerKey] = { nick, ...hashPassword(superOwnerPassword), role: 'owner', provisionedByEnvironment: true };
+        ownerEntry = [ownerKey, accounts[ownerKey]];
+      } else if (ownerEntry[1].provisionedByEnvironment !== true) {
+        Object.assign(ownerEntry[1], hashPassword(superOwnerPassword), { provisionedByEnvironment: true });
+      }
+    }
+    if (!ownerEntry) {
+      if (nick === superOwnerNick) continue;
+      throw new Error(`KONTO "${nick}" MUSI ISTNIEĆ PRZED NADANIEM ROLI WŁAŚCICIELA`);
+    }
+    const [storedOwnerKey, owner] = ownerEntry;
     if (storedOwnerKey !== ownerKey) delete accounts[storedOwnerKey];
     owner.nick = normalizeNick(owner.nick) || nick;
     owner.role = 'owner';
@@ -203,7 +231,7 @@ function limitedWizardForMonth(month) {
 function finalizeCareerMonths(career, currentMonth) {
   for (const [month, record] of Object.entries(career.months)) {
     if (month >= currentMonth || record.finalized) continue;
-    const leaders = Object.entries(record.scores || {}).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 5);
+    const leaders = Object.entries(record.scores || {}).filter(([key]) => key !== hiddenOwnerKey).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 5);
     const wizard = limitedWizardForMonth(month);
     record.rewards = Object.fromEntries(leaders.map(([key]) => [key, wizard]));
     record.finalized = true;
@@ -216,7 +244,7 @@ function careerState(career, playerKey) {
   const player = career.players[playerKey] || { nick: playerKey, dailyKey, dailyWins: 0, dailyBoxes: 0 };
   if (player.dailyKey !== dailyKey) Object.assign(player, { dailyKey, dailyWins: 0, dailyBoxes: 0 });
   career.players[playerKey] = player;
-  const standings = Object.entries(career.months[month]?.scores || {}).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 10).map(([key, score], index) => ({ place: index + 1, nick: score.nick || career.players[key]?.nick || key, wins: score.wins }));
+  const standings = Object.entries(career.months[month]?.scores || {}).filter(([key]) => key !== hiddenOwnerKey).sort((left, right) => right[1].wins - left[1].wins || left[1].nick.localeCompare(right[1].nick)).slice(0, 10).map(([key, score], index) => ({ place: index + 1, nick: score.nick || career.players[key]?.nick || key, wins: score.wins }));
   const limitedRewards = Object.values(career.months).filter(record => record.finalized && record.rewards?.[playerKey]).map(record => record.rewards[playerKey]);
   const rankPoints = Math.max(0, Number(player.rankPoints) || 0);
   const rankStep = Math.min(rankedLeagues.length * 3 - 1, Math.floor(rankPoints / 100));
@@ -253,7 +281,7 @@ function verifyOwnerCredentials(nick, password, accounts) {
   const ownerKey = String(nick || '').trim().toLowerCase();
   if (!ownerNicks.includes(ownerKey)) return false;
   const account = accounts[ownerKey];
-  if (account?.role !== 'owner') return false;
+  if (account?.role !== 'owner' || account.banned === true) return false;
   if (!account?.salt || !account?.hash) return false;
   const actual = Buffer.from(hashPassword(String(password || ''), account.salt).hash, 'hex');
   const expected = Buffer.from(account.hash, 'hex');
@@ -263,6 +291,19 @@ function verifyOwnerCredentials(nick, password, accounts) {
 function sendJson(response, status, body) {
   response.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8' });
   response.end(JSON.stringify(body));
+}
+
+function removeOwnerLoginChallenge(token) {
+  const challenge = ownerLoginChallenges.get(token);
+  if (!challenge) return;
+  ownerLoginChallenges.delete(token);
+  if (ownerLoginChallengesByNick.get(challenge.accountKey) === token) ownerLoginChallengesByNick.delete(challenge.accountKey);
+}
+
+function createLoginSession(account) {
+  const sessionToken = issueSessionToken(account);
+  activeSessionsByNick.set(account.nick.toLowerCase(), sessionToken);
+  return sessionToken;
 }
 
 async function handleAuthRequest(request, response) {
@@ -297,19 +338,72 @@ async function handleAuthRequest(request, response) {
       const actual = Buffer.from(hashPassword(password, account.salt).hash, 'hex');
       const expected = Buffer.from(account.hash, 'hex');
       if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true; }
+      if (account.banned === true) { sendJson(response, 403, { error: 'TO KONTO ZOSTAŁO ZABANOWANE' }); return true; }
     }
     if (action === 'login') {
       const sessionKey = account.nick.toLowerCase();
       if (hasActiveSession(sessionKey) || activeSocketsByNick.get(sessionKey)?.readyState === WebSocket.OPEN) {
         sendJson(response, 409, { error: 'TO KONTO JEST JUŻ UŻYWANE NA INNYM URZĄDZENIU' }); return true;
       }
+      if (sessionKey === hiddenOwnerKey && account.role === 'owner') {
+        const pendingToken = ownerLoginChallengesByNick.get(sessionKey);
+        const pendingChallenge = pendingToken && ownerLoginChallenges.get(pendingToken);
+        if (pendingChallenge && pendingChallenge.expiresAt > Date.now()) {
+          sendJson(response, 409, { error: 'DOKOŃCZ TRWAŁE LOGOWANIE DO KONTA' }); return true;
+        }
+        if (pendingToken) removeOwnerLoginChallenge(pendingToken);
+        const challengeToken = crypto.randomBytes(32).toString('hex');
+        ownerLoginChallenges.set(challengeToken, {
+          accountKey: sessionKey,
+          accountHash: account.hash,
+          expiresAt: Date.now() + 5 * 60 * 1000,
+          step: 0
+        });
+        ownerLoginChallengesByNick.set(sessionKey, challengeToken);
+        sendJson(response, 200, { challengeRequired: true, challengeToken, question: ownerChallengeQuestions[0] });
+        return true;
+      }
     }
     writeAccounts(accounts);
-    const sessionToken = issueSessionToken(account);
-    if (action === 'register' || action === 'login') activeSessionsByNick.set(account.nick.toLowerCase(), sessionToken);
+    const sessionToken = createLoginSession(account);
     sendJson(response, action === 'register' ? 201 : 200, {
       account: publicAccount(account),
       progress: action === 'login' ? account.progress || null : null,
+      sessionToken
+    });
+    return true;
+  }
+
+  if (action === 'owner-challenge') {
+    const challengeToken = String(input.challengeToken || '');
+    const challenge = ownerLoginChallenges.get(challengeToken);
+    if (!challenge || challenge.expiresAt <= Date.now()) {
+      if (challenge) removeOwnerLoginChallenge(challengeToken);
+      sendJson(response, 401, { error: 'PYTANIE WYGASŁO // ZALOGUJ SIĘ PONOWNIE' }); return true;
+    }
+    const answer = String(input.answer || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const expectedAnswers = ownerChallengeAnswers[challenge.step];
+    if (Array.isArray(expectedAnswers) ? !expectedAnswers.includes(answer) : answer !== expectedAnswers) {
+      removeOwnerLoginChallenge(challengeToken);
+      sendJson(response, 401, { error: 'NIEPRAWIDŁOWA ODPOWIEDŹ // ZALOGUJ SIĘ PONOWNIE' }); return true;
+    }
+    challenge.step += 1;
+    if (challenge.step < ownerChallengeQuestions.length) {
+      sendJson(response, 200, { complete: false, question: ownerChallengeQuestions[challenge.step] });
+      return true;
+    }
+    removeOwnerLoginChallenge(challengeToken);
+    const accountEntry = findAccountEntry(accounts, superOwnerNick);
+    const account = accountEntry?.[1];
+    if (!account || account.hash !== challenge.accountHash || account.banned === true ||
+        hasActiveSession(challenge.accountKey) || activeSocketsByNick.get(challenge.accountKey)?.readyState === WebSocket.OPEN) {
+      sendJson(response, 401, { error: 'NIE MOŻNA ZAKOŃCZYĆ LOGOWANIA // SPRÓBUJ PONOWNIE' }); return true;
+    }
+    const sessionToken = createLoginSession(account);
+    sendJson(response, 200, {
+      complete: true,
+      account: publicAccount(account),
+      progress: account.progress || null,
       sessionToken
     });
     return true;
@@ -330,6 +424,7 @@ async function handleAuthRequest(request, response) {
     const accountEntry = findAccountEntry(accounts, nick);
     const account = accountEntry?.[1];
     if (!account) { sendJson(response, 404, { error: 'KONTO O PODANYM NICKU NIE ISTNIEJE NA SERWERZE' }); return true; }
+    if (account.banned === true) { sendJson(response, 403, { error: 'TO KONTO ZOSTAŁO ZABANOWANE' }); return true; }
     if (password.length < 4 || password.length > 128 || !account.salt || !account.hash) {
       sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true;
     }
@@ -348,11 +443,11 @@ async function handleAuthRequest(request, response) {
 
   if (action === 'check-account') {
     const requester = findAccountEntry(accounts, nick)?.[1];
-    if (!requester || !verifyAccountPassword(requester, password)) {
+    if (!requester || requester.banned === true || !verifyAccountPassword(requester, password)) {
       sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true;
     }
     const target = findAccountEntry(accounts, input.targetNick);
-    if (!target) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return true; }
+    if (!target || target[0] === hiddenOwnerKey) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return true; }
     sendJson(response, 200, { account: publicAccount(target[1]) });
     return true;
   }
@@ -361,6 +456,7 @@ async function handleAuthRequest(request, response) {
     const accountEntry = findAccountEntry(accounts, input.currentNick);
     const account = accountEntry?.[1];
     if (!account) { sendJson(response, 404, { error: 'NIE ZNALEZIONO KONTA' }); return true; }
+    if (account.banned === true) { sendJson(response, 403, { error: 'TO KONTO ZOSTAŁO ZABANOWANE' }); return true; }
     if (action === 'change-nick' && account.role === 'owner') {
       sendJson(response, 403, { error: 'WŁAŚCICIEL NIE MOŻE ZMIENIĆ NICKU KONTA' }); return true;
     }
@@ -423,9 +519,16 @@ async function handleOwnerRequest(request, response) {
   let input;
   try { input = JSON.parse(await new Promise((resolve, reject) => { let body = ''; request.on('data', chunk => body += chunk); request.on('end', () => resolve(body)); request.on('error', reject); })); }
   catch { sendJson(response, 400, { error: 'NIEPRAWIDŁOWE DANE' }); return; }
-  const accounts = readAccounts();
-  if (!verifyOwnerCredentials(input.ownerNick, input.password, accounts)) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWE HASŁO WŁAŚCICIELA' }); return; }
   const action = request.url.split('?')[0].slice('/api/owner/'.length);
+  const accounts = readAccounts();
+  const requesterEntry = findAccountEntry(accounts, input.ownerNick);
+  const requester = requesterEntry?.[1];
+  const ownerAuthenticated = verifyOwnerCredentials(input.ownerNick, input.password, accounts);
+  const adminBanAuthenticated = action === 'set-ban' && requester?.role === 'admin' &&
+    requester.banned !== true && verifyAccountPassword(requester, input.password);
+  if (!ownerAuthenticated && !adminBanAuthenticated) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWE HASŁO WŁAŚCICIELA' }); return; }
+  if (action !== 'set-ban' && !ownerAuthenticated) { sendJson(response, 403, { error: 'BRAK UPRAWNIEŃ' }); return; }
+  const requesterKey = normalizeNick(requester?.nick || input.ownerNick).toLowerCase();
   if (action === 'verify-password') { sendJson(response, 200, { verified: true }); return; }
   if (action === 'set-role') {
     const target = findAccountEntry(accounts, input.targetNick);
@@ -436,6 +539,26 @@ async function handleOwnerRequest(request, response) {
     target[1].role = role;
     writeAccounts(accounts);
     sendJson(response, 200, { account: publicAccount(target[1]) });
+    return;
+  }
+  if (action === 'set-ban') {
+    const target = findAccountEntry(accounts, input.targetNick);
+    if (!target) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
+    const targetKey = target[0];
+    const banned = input.banned === true;
+    if (targetKey === hiddenOwnerKey) { sendJson(response, 403, { error: 'TEGO KONTA NIE MOŻNA ZABANOWAĆ' }); return; }
+    if (ownerNicks.includes(targetKey) && requesterKey !== hiddenOwnerKey) {
+      sendJson(response, 403, { error: 'TYLKO WŁAŚCICIEL GRY MOŻE ZBANOWAĆ INNEGO WŁAŚCICIELA' }); return;
+    }
+    target[1].banned = banned;
+    writeAccounts(accounts);
+    if (banned) {
+      const activeToken = activeSessionsByNick.get(targetKey);
+      if (activeToken) releaseSession(activeToken);
+      const activeSocket = activeSocketsByNick.get(targetKey);
+      if (activeSocket) activeSocket.close(1008, 'Account banned');
+    }
+    sendJson(response, 200, { account: publicAccount(target[1]), banned });
     return;
   }
   if (action === 'reset-ranking') {
@@ -469,11 +592,13 @@ function handleRankingRequest(request, response) {
   if (mode === 'wins') {
     players = Object.values(career.months[warsawMonthKey()]?.scores || {})
       .map(player => ({ nick: String(player.nick || 'GRACZ'), wins: Math.max(0, Number(player.wins) || 0) }))
+      .filter(player => player.nick.toLowerCase() !== hiddenOwnerKey)
       .sort((left, right) => right.wins - left.wins || left.nick.localeCompare(right.nick))
       .slice(0, 10);
   } else {
     players = Object.values(career.players)
       .map(player => ({ nick: String(player.nick || 'GRACZ'), [mode === 'ranked' ? 'rankPoints' : 'kills']: Math.max(0, Number(player[mode === 'ranked' ? 'rankPoints' : 'kills']) || 0) }))
+      .filter(player => player.nick.toLowerCase() !== hiddenOwnerKey)
       .filter(player => mode !== 'kills' || player.kills > 0)
       .sort((left, right) => (mode === 'ranked' ? right.rankPoints - left.rankPoints : right.kills - left.kills) || left.nick.localeCompare(right.nick))
       .slice(0, mode === 'ranked' ? 10 : 20);
@@ -548,8 +673,8 @@ function finishRoom(socket, message) {
   rooms.delete(code);
 }
 function safeProfile(profile = {}) { return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', skinId: ['gold', 'spark', 'spring', 'monochrome'].includes(profile.skinId) ? profile.skinId : '', wizardId: /^(?:[a-z]+|limited-\d{4}-\d{2})$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice', title: String(profile.title || '').slice(0, 48) }; }
-function createMatch(firstParty, secondParty, code, matchType = '1v1', ranked = false) { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; player.rankedMatch = ranked; player.rankedQueueActive = false; player.rankedFallbackOpen = false; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', matchType, ranked, teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
-function enqueueRandom(socket, requestedType = '1v1', ranked = false) { const queues = ranked ? rankedQueues : randomQueues; const matchType = queues.has(requestedType) ? requestedType : '1v1'; if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; const maxPartySize = matchType === '1v3' ? 3 : 2; if (party.members.size > maxPartySize || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST ZA DUŻA LUB JEST JUŻ W MECZU' }); return; } if ([...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } party.ranked = ranked; socket.rankedQueueActive = ranked; const queue = queues.get(matchType); const opponentIndex = queue.findIndex(candidate => { if (candidate.id === party.id || [...candidate.members].some(member => member.room)) return false; const sizes = [party.members.size, candidate.members.size].sort((left, right) => left - right); return matchType === '2v2' ? sizes[0] === 2 && sizes[1] === 2 : matchType === '1v2' ? sizes[0] === 1 && sizes[1] === 2 : matchType === '1v3' ? sizes[0] === 1 && sizes[1] === 3 : sizes[0] === 1 && sizes[1] === 1; }); send(socket, { type: 'queue-waiting', matchType, teamSize: party.members.size, ranked }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchType, ranked); }
+function createMatch(firstParty, secondParty, code, matchType = '1v1', ranked = false) { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; player.rankedMatch = ranked; player.rankedQueueActive = false; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', matchType, ranked, teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
+function enqueueRandom(socket, requestedType = '1v1', ranked = false) { const queues = ranked ? rankedQueues : randomQueues; const matchType = ranked ? '3v3' : queues.has(requestedType) ? requestedType : '1v1'; if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; const maxPartySize = matchType === '3v3' || matchType === '1v3' ? 3 : 2; if (party.members.size > maxPartySize || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST ZA DUŻA LUB JEST JUŻ W MECZU' }); return; } if (ranked && party.members.size !== 3) { send(socket, { type: 'queue-error', message: 'RANKING 3 NA 3 WYMAGA PEŁNEJ DRUŻYNY TRZECH GRACZY' }); return; } if ([...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } party.ranked = ranked; socket.rankedQueueActive = ranked; const queue = queues.get(matchType); const opponentIndex = queue.findIndex(candidate => { if (candidate.id === party.id || [...candidate.members].some(member => member.room)) return false; const sizes = [party.members.size, candidate.members.size].sort((left, right) => left - right); return matchType === '3v3' ? sizes[0] === 3 && sizes[1] === 3 : matchType === '2v2' ? sizes[0] === 2 && sizes[1] === 2 : matchType === '1v2' ? sizes[0] === 1 && sizes[1] === 2 : matchType === '1v3' ? sizes[0] === 1 && sizes[1] === 3 : sizes[0] === 1 && sizes[1] === 1; }); send(socket, { type: 'queue-waiting', matchType, teamSize: party.members.size, ranked }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchType, ranked); }
 
 webSocketServer.on('connection', socket => {
   socket.on('message', rawMessage => {
@@ -561,6 +686,7 @@ webSocketServer.on('connection', socket => {
       const accounts = readAccounts();
       const accountEntry = findAccountEntry(accounts, message.nick);
       if (!session || session.expiresAt <= Date.now() || !accountEntry ||
+          accountEntry[1].banned === true ||
           session.accountHash !== accountEntry[1].hash ||
           activeSessionsByNick.get(accountEntry[0]) !== token) {
         sendSocialError(socket, 'account', 'SESJA WYGASŁA // ZALOGUJ SIĘ PONOWNIE');
@@ -599,7 +725,7 @@ webSocketServer.on('connection', socket => {
       const senderEntry = findAccountEntry(accounts, socket.nick);
       const targetEntry = findAccountEntry(accounts, message.targetNick);
       if (!senderEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
-      if (!targetEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (!targetEntry || targetEntry[0] === hiddenOwnerKey) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
       if (senderEntry[0] === targetEntry[0]) { sendSocialError(socket, 'friend', 'NIE MOŻESZ DODAĆ SIEBIE DO ZNAJOMYCH'); return; }
       if (areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'friend', 'TEN GRACZ JUŻ JEST ZNAJOMYM'); return; }
       const requests = accountFriendRequests(targetEntry[1]);
@@ -645,6 +771,7 @@ webSocketServer.on('connection', socket => {
       const senderEntry = findAccountEntry(accounts, socket.nick);
       const targetEntry = findAccountEntry(accounts, message.targetNick);
       if (!senderEntry || !targetEntry) { sendSocialError(socket, 'group', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (targetEntry[0] === hiddenOwnerKey) { sendSocialError(socket, 'group', 'ZNAJOMY JEST NIEDOSTĘPNY'); return; }
       if (!areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'group', 'MOŻESZ ZAPROSIĆ DO GRUPY TYLKO ZNAJOMEGO'); return; }
       let group = socket.groupId && groups.get(socket.groupId);
       if (!group) { group = { id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, members: new Set([socket]), pendingInvites: new Set() }; groups.set(group.id, group); socket.groupId = group.id; }
@@ -763,7 +890,7 @@ webSocketServer.on('connection', socket => {
       return;
     }
     if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1'), message.ranked === true); return; }
-    if (message.type === 'queue-cancel') { if (socket.rankedQueueActive) { socket.rankedFallbackOpen = true; socket.rankedQueueActive = false; } removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
+    if (message.type === 'queue-cancel') { socket.rankedQueueActive = false; removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
     if (message.type === 'bot-match-start') {
       const botMatchLimits = { bot: 1, 'bot-one-two': 2, 'bot-one-three': 3, 'bot-two-two': 2 };
       const mode = String(message.mode || '');
@@ -789,17 +916,6 @@ webSocketServer.on('connection', socket => {
       writeCareer(career);
       match.targets.add(targetId);
       send(socket, state);
-      return;
-    }
-    if (message.type === 'ranked-bot-result' && socket.rankedFallbackOpen && socket.nick) {
-      socket.rankedFallbackOpen = false;
-      const career = readCareer();
-      const key = socket.nick.toLowerCase();
-      const player = career.players[key] || { nick: socket.nick, dailyKey: warsawDailyKey(), dailyWins: 0, dailyBoxes: 0 };
-      player.rankPoints = Math.max(0, (Number(player.rankPoints) || 0) + (message.won === true ? 100 : -50));
-      career.players[key] = player;
-      writeCareer(career);
-      send(socket, careerState(career, key));
       return;
     }
     if (message.type === 'join') {
