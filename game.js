@@ -1,4 +1,4 @@
-
+//game js
 addEventListener('storage', event => { if (!matchRoomKey || event.key !== matchRoomKey || !event.newValue) return; const room = JSON.parse(event.newValue); if (room.started && room.players.length === 2 && !running) { joined = true; mode = 'player'; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; startGame('player'); } });
 const canvas = document.getElementById('gameCanvas');
 let rankingMode = "top20"; // albo "top10"
@@ -197,6 +197,12 @@ const chests = {
 };
 const keychains = { 'strength-charm': { name: 'TALIZMAN SIŁY', rarity: 'LEGENDARNY', damageMultiplier: 1.2 }, 'damage-charm': { name: 'BRELOK MOCY', rarity: 'NIEZWYKŁY', damageMultiplier: 1.005 }, 'vitality-charm': { name: 'SERCE ARENY', rarity: 'RZADKI', healthPercent: .1 }, 'life-charm': { name: 'KAMIEŃ ŻYCIA', rarity: 'NIEZWYKŁY', healthBonus: 10 }, 'ward-charm': { name: 'RUNICZNA OSŁONA', rarity: 'RZADKI', damageReduction: .1 }, 'owner-charm': { name: 'ZNAK WŁAŚCICIELA', rarity: 'MITYCZNY', damageMultiplier: 1.2, damageReduction: .15 }, 'admin-charm': { name: 'ODZNAKA ADMINA', rarity: 'EPICKI', damageMultiplier: 1.07, damageReduction: .1 } };
 const hats = { 'strength-hat': { name: 'KAPELUSZ MOCY', rarity: 'LEGENDARNY', damageMultiplier: 1.05, symbol: '♛' }, 'guard-hat': { name: 'KAPELUSZ STRAŻNIKA', rarity: 'RZADKI', damageReduction: .05, symbol: '◆' }, 'light-hat': { name: 'LEKKA OSŁONA', rarity: 'NIEZWYKŁY', damageReduction: .025, symbol: '◇' } };
+const mageSkins = {
+  gold: { name: 'ZŁOTY', value: 10000, player: '#ffd43b', opponent: '#8b5cf6', ally: '#62c987', playerAccent: '#fff0a3', opponentAccent: '#c4a8ff', allyAccent: '#b7f2c9', colors: 'TY: ŻÓŁTY // PRZECIWNIK: FIOLETOWY // SOJUSZNIK: ZIELONY' },
+  spark: { name: 'ISKRA', value: 23000, player: '#ff922b', opponent: '#3485eb', ally: '#53d5d0', playerAccent: '#ffd0a1', opponentAccent: '#b6d8ff', allyAccent: '#b6fff4', colors: 'TY: POMARAŃCZOWY // PRZECIWNIK: NIEBIESKI // SOJUSZNIK: TURKUSOWY' },
+  spring: { name: 'WIOSENNY', value: 35000, player: '#45c46a', opponent: '#ed5b9b', ally: '#ffad42', playerAccent: '#b7f2c9', opponentAccent: '#ffc0dc', allyAccent: '#ffe0a6', colors: 'TY: ZIELONY // PRZECIWNIK: RÓŻOWY // SOJUSZNIK: POMARAŃCZOWY' },
+  monochrome: { name: 'MONOCHROMATYCZNY', value: 50000, player: '#ffffff', opponent: '#171717', ally: '#888888', playerAccent: '#d9d9d9', opponentAccent: '#555555', allyAccent: '#c4c4c4', colors: 'TY: BIAŁY // PRZECIWNIK: CZARNY // SOJUSZNIK: SZARY' }
+};
 const passCharacters = {
   vip: { name: 'ELEKTRYCZNY', pass: 'VIP', wizardId: 'electric' },
   svip: { name: 'ILUZJONISTA', pass: 'SVIP', wizardId: 'illusionist' },
@@ -221,20 +227,33 @@ function migrateOldPassCharacters() {
   const previous = getMap('arcanaSkins');
   const previousItems = Array.isArray(previous[key]) ? previous[key] : [];
   const equippedId = getMap('arcanaEquippedSkin')[key];
+  const legacyPassSkins = { 'vip-electric': 'vip', 'svip-illusionist': 'svip', 'gvip-thunder': 'gvip', 'premium-eagle': 'premium' };
   previousItems.forEach(id => {
-    const passId = { 'vip-electric': 'vip', 'svip-illusionist': 'svip', 'gvip-thunder': 'gvip', 'premium-eagle': 'premium' }[id];
+    const passId = legacyPassSkins[id];
     if (passId) grantPassCharacter(passId);
   });
-  const equipped = passCharacters[{ 'vip-electric': 'vip', 'svip-illusionist': 'svip', 'gvip-thunder': 'gvip', 'premium-eagle': 'premium' }[equippedId]];
+  const equipped = passCharacters[legacyPassSkins[equippedId]];
   if (equipped) {
     grantPassCharacter(equipped.pass.toLowerCase());
     useWizard(equipped.wizardId);
   }
-  delete previous[key];
+  previous[key] = previousItems.filter(id => !legacyPassSkins[id]);
   saveMap('arcanaSkins', previous);
-  const equippedMap = getMap('arcanaEquippedSkin');
-  delete equippedMap[key];
-  saveMap('arcanaEquippedSkin', equippedMap);
+  if (legacyPassSkins[equippedId]) {
+    const equippedMap = getMap('arcanaEquippedSkin');
+    delete equippedMap[key];
+    saveMap('arcanaEquippedSkin', equippedMap);
+  }
+}
+function getMageSkinInventory() { const inventory = getMap('arcanaSkins')[currentUser.toLowerCase()]; return Array.isArray(inventory) ? inventory : []; }
+function getEquippedMageSkin() {
+  const id = getMap('arcanaEquippedSkin')[currentUser.toLowerCase()] || '';
+  return getMageSkinInventory().includes(id) && mageSkins[id] ? id : '';
+}
+function ownsMageSkin(id) {
+  const account = currentUser ? playerData?.[currentUser] : null;
+  const passId = { gold: 'vip', spark: 'svip', spring: 'gvip', monochrome: 'premium' }[id];
+  return getMageSkinInventory().includes(id) || Boolean(passId && (account?.ownedPass?.includes(passId) || account?.[passId]));
 }
 window.grantPassCharacter = grantPassCharacter;
 function getKeychains() { return getMap('arcanaKeychains')[currentUser.toLowerCase()] || []; }
@@ -303,7 +322,7 @@ function drawAvatar(canvas, data, nick) {
 function updateProfile() { if (!currentUser) return; const key = currentUser.toLowerCase(); const equipped = getEquippedKeychains(); const dropMap = getMap('arcanaDropCharm'); const previous = dropMap[key]; profileUi.dropCharm.innerHTML = equipped.length ? equipped.map(id => `<option value="${id}">${keychains[id].name}</option>`).join('') : '<option value="">BRAK ZAŁOŻONYCH BRELOCZKÓW</option>'; profileUi.dropCharm.disabled = equipped.length === 0; profileUi.dropCharm.value = equipped.includes(previous) ? previous : (equipped[0] || ''); if (equipped.length && !equipped.includes(previous)) { dropMap[key] = equipped[0]; saveMap('arcanaDropCharm', dropMap); } profileUi.dropEnabled.checked = Boolean(getMap('arcanaDropEnabled')[key]); profileUi.dropEnabled.disabled = equipped.length === 0; updateTitleChoices(); }
 function openProfile() { const key = currentUser.toLowerCase(); profileUi.name.textContent = getAccounts()[key]?.nick || currentUser; profileUi.modal.classList.remove('hidden'); updateProfile(); updateAccountDirectory(); const avatar = getMap('arcanaAvatars')[key] || ''; drawAvatar(profileUi.avatar, avatar, currentUser); drawAvatar(profileUi.editor, avatar, currentUser); }
 function recordWizardWin() { if (matchWinRecorded || !currentUser) return; matchWinRecorded = true; const key = currentUser.toLowerCase(); const wins = getMap('arcanaWizardWins'); wins[key] ||= {}; const previous = Number(wins[key][selectedWizard] || 0); wins[key][selectedWizard] = previous + 1; saveMap('arcanaWizardWins', wins); if (previous < 500 && wins[key][selectedWizard] >= 500) setToast(`TYTUŁ ODBLOKOWANY: ${wizardTitles[selectedWizard]}`); updateTitleChoices(); connectMatchSocket(() => sendNetwork({ type: 'career-win' })); }
-function moveAccountData(oldNick, newNick) { const oldKey = oldNick.toLowerCase(); const newKey = newNick.toLowerCase(); const accounts = getAccounts(); const account = accounts[oldKey] || {}; delete accounts[oldKey]; account.nick = newNick; accounts[newKey] = account; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels', 'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle'].forEach(name => { const map = getMap(name); if (Object.hasOwn(map, oldKey)) { map[newKey] = map[oldKey]; delete map[oldKey]; saveMap(name, map); } }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); if (map[oldKey]) { map[newKey] = map[oldKey]; delete map[oldKey]; } Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).map(nick => nick.toLowerCase() === oldKey ? newNick : nick); }); saveMap(name, map); }); }
+function moveAccountData(oldNick, newNick) { const oldKey = oldNick.toLowerCase(); const newKey = newNick.toLowerCase(); const accounts = getAccounts(); const account = accounts[oldKey] || {}; delete accounts[oldKey]; account.nick = newNick; accounts[newKey] = account; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels', 'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaSkins', 'arcanaEquippedSkin'].forEach(name => { const map = getMap(name); if (Object.hasOwn(map, oldKey)) { map[newKey] = map[oldKey]; delete map[oldKey]; saveMap(name, map); } }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); if (map[oldKey]) { map[newKey] = map[oldKey]; delete map[oldKey]; } Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).map(nick => nick.toLowerCase() === oldKey ? newNick : nick); }); saveMap(name, map); }); }
 async function changeAccountNick(event) { event.preventDefault(); const oldNick = document.getElementById('changeNickCurrent').value.trim(); const newNick = document.getElementById('changeNickNew').value.trim(); const message = document.getElementById('nickChangeMessage'); message.textContent = ''; if (onlineMatch || running) { message.textContent = 'ZAKOŃCZ MECZ PRZED ZMIANĄ NICKU'; return; } if (oldNick.toLowerCase() !== currentUser.toLowerCase()) { message.textContent = 'WPISZ SWÓJ OBECNY NICK'; return; } try { const remote = await authRequest('change-nick', { currentNick: currentUser, currentPassword: document.getElementById('changeNickPassword').value, newNick }); moveAccountData(currentUser, remote.nick); currentUser = remote.nick; localStorage.setItem('arcanaCurrentUser', currentUser); ui.playerName.textContent = `GRACZ: ${currentUser}`; profileUi.name.textContent = currentUser; document.getElementById('changeNickCurrent').value = ''; document.getElementById('changeNickPassword').value = ''; document.getElementById('changeNickNew').value = ''; updateFriends(); updateAccountDirectory(); if (matchSocket) { matchSocket.close(); matchSocket = null; } message.textContent = 'NICK ZMIENIONY'; } catch (error) { message.textContent = error.message; } }
 async function changeAccountPassword(event) { event.preventDefault(); const message = document.getElementById('passwordChangeMessage'); message.textContent = ''; const newPassword = document.getElementById('changePasswordNew').value; if (newPassword !== document.getElementById('changePasswordRepeat').value) { message.textContent = 'NOWE HASŁA NIE SĄ TAKIE SAME'; return; } try { await authRequest('change-password', { currentNick: currentUser, currentPassword: document.getElementById('changePasswordCurrent').value, newPassword, confirmPassword: document.getElementById('changePasswordRepeat').value }); sessionPassword = newPassword; const accounts = getAccounts(); accounts[currentUser.toLowerCase()].serverSynced = true; delete accounts[currentUser.toLowerCase()].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); profileUi.passwordForm.reset(); message.textContent = 'HASŁO ZMIENIONE'; } catch (error) { message.textContent = error.message; } }
 function updateAccountDirectory() { const accounts = getAccounts(); const entries = Object.entries(accounts).filter(([, account]) => account?.nick).sort((left, right) => left[1].nick.localeCompare(right[1].nick)); accountUi.list.innerHTML = entries.map(([key, account]) => `<button type="button" data-account-view="${encodeURIComponent(key)}">${escapeHtml(account.nick)}</button>`).join('') || '<span class="friends-empty">BRAK KONT</span>'; }
@@ -316,7 +335,7 @@ deleteAccountConfirmed = function () { const key = accountPendingDelete; if (key
 function saveAvatar() { if (!currentUser) return; const avatars = getMap('arcanaAvatars'); avatars[currentUser.toLowerCase()] = profileUi.editor.toDataURL('image/png'); saveMap('arcanaAvatars', avatars); drawAvatar(profileUi.avatar, avatars[currentUser.toLowerCase()], currentUser); setToast('AVATAR ZAPISANY'); }
 function accountCharm(id) { const inventory = getMap('arcanaKeychains'); inventory[id] = Array.from(new Set([...(inventory[id] || []), 'admin-charm'])); saveMap('arcanaKeychains', inventory); const equipped = getMap('arcanaEquipped'); equipped[id] = Array.from(new Set([...(equipped[id] || []), 'admin-charm'])).slice(0, 3); saveMap('arcanaEquipped', equipped); }
 function getCurrentTitle() { const id = getMap('arcanaSelectedTitle')[currentUser.toLowerCase()] || ''; return wizardTitles[id] || ''; }
-function getProfileDrop() { const key = currentUser.toLowerCase(); const enabled = Boolean(getMap('arcanaDropEnabled')[key]); const charm = getMap('arcanaDropCharm')[key]; return { nick: currentUser, role: getAccounts()[key]?.role || 'user', dropEnabled: enabled && getEquippedKeychains().includes(charm), dropCharm: charm, hatId: getEquippedHat(), wizardId: selectedWizard, title: getCurrentTitle(), damageMultiplier: getStrengthMultiplier(), damageReduction: getDamageReduction() }; }
+function getProfileDrop() { const key = currentUser.toLowerCase(); const enabled = Boolean(getMap('arcanaDropEnabled')[key]); const charm = getMap('arcanaDropCharm')[key]; return { nick: currentUser, role: getAccounts()[key]?.role || 'user', dropEnabled: enabled && getEquippedKeychains().includes(charm), dropCharm: charm, hatId: getEquippedHat(), skinId: getEquippedMageSkin(), wizardId: selectedWizard, title: getCurrentTitle(), damageMultiplier: getStrengthMultiplier(), damageReduction: getDamageReduction() }; }
 function syncProfileToServer() { if (matchSocket?.readyState === WebSocket.OPEN) sendNetwork({ type: 'profile-update', profile: getProfileDrop() }); }
 function clearAuthForm() {
   auth.registerNick.value = '';
@@ -891,27 +910,17 @@ function drawEagleProjectile(spell) {
 }
 function drawMage(m, label) {
   if (m.invisible) return;
-  const playerAccount = window.playerData?.[currentUser];
-  const ownedPasses = new Set(playerAccount?.ownedPass || []);
-  ['vip', 'svip', 'gvip', 'premium'].forEach(passId => {
-    if (playerAccount?.[passId]) ownedPasses.add(passId);
-  });
   const sameTeam = onlineMatch ? m === p1 || m.teamId === teamId : m === p1 || m.teamId === 'player-team';
-  const skinColors = ownedPasses.has('premium')
-    ? { player: '#ffffff', opponent: '#171717', ally: '#888888', playerAccent: '#d9d9d9', opponentAccent: '#555555', allyAccent: '#c4c4c4' }
-    : ownedPasses.has('gvip')
-      ? { player: '#45c46a', opponent: '#ed5b9b', ally: '#ffad42', playerAccent: '#b7f2c9', opponentAccent: '#ffc0dc', allyAccent: '#ffe0a6' }
-      : ownedPasses.has('svip')
-        ? { player: '#ff922b', opponent: '#3485eb', ally: '#53d5d0', playerAccent: '#ffd0a1', opponentAccent: '#b6d8ff', allyAccent: '#b6fff4' }
-        : ownedPasses.has('vip')
-          ? { player: '#ffd43b', opponent: '#8b5cf6', ally: '#62c987', playerAccent: '#fff0a3', opponentAccent: '#c4a8ff', allyAccent: '#b7f2c9' }
-      : null;
-  const appearance = skinColors
+  const localSkin = mageSkins[getEquippedMageSkin()];
+  const characterSkin = mageSkins[m === p1 ? getEquippedMageSkin() : (m.skinId || (m === p2 ? opponentProfile.skinId : ''))];
+  const palette = characterSkin || localSkin;
+  const appearance = palette
     ? {
-        color: sameTeam ? (m === p1 ? skinColors.player : skinColors.ally) : skinColors.opponent,
-        accent: sameTeam ? (m === p1 ? skinColors.playerAccent : skinColors.allyAccent) : skinColors.opponentAccent
+        color: characterSkin ? palette.player : sameTeam ? palette.ally : palette.opponent,
+        accent: characterSkin ? palette.playerAccent : sameTeam ? palette.allyAccent : palette.opponentAccent,
+        hasSkin: true
       }
-    : { color: m.color, accent: m.accent };
+    : { color: m.color, accent: m.accent, hasSkin: false };
   ctx.save(); ctx.translate(m.x, m.y);
   const reflectTime = m === p1 ? p1.reflectShield : m === p2 ? p2.reflectShield : 0;
   const shieldTime = m === p1 ? p1.shield : 0;
@@ -927,7 +936,7 @@ function drawMage(m, label) {
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.strokeRect(-barWidth / 2, -78, barWidth, 9);
   ctx.fillStyle = '#f4f7ff'; ctx.font = '700 9px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(`${Math.max(0, Math.ceil(m.hp || 0))}/${Math.ceil(m.maxHp || 1)}`, 0, -87);
   ctx.shadowColor = appearance.color; ctx.shadowBlur = 16; ctx.fillStyle = appearance.color; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
-  ctx.shadowBlur = 0; ctx.fillStyle = skinColors ? appearance.color : '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0; ctx.fillStyle = appearance.hasSkin ? appearance.color : '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
   const hatId = m === p1 ? getEquippedHat() : (m.hatId || (m === p2 ? opponentProfile.hatId : ''));
   if (hats[hatId]) { ctx.fillStyle = hatId === 'strength-hat' ? '#ffcf67' : hatId === 'guard-hat' ? '#91d8ee' : '#d9d4f1'; ctx.beginPath(); ctx.moveTo(-20, -43); ctx.lineTo(-14, -58); ctx.lineTo(14, -58); ctx.lineTo(20, -43); ctx.closePath(); ctx.fill(); ctx.fillRect(-23, -44, 46, 5); }
   ctx.strokeStyle = appearance.accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
@@ -945,6 +954,14 @@ screen.orientation?.addEventListener?.('change', updateOrientationPrompt);
 function refreshPrimaryOpponent() { const opponents = [...remotePlayers.values()].filter(player => player.teamId !== teamId); if (!opponents.length) return; const nearest = opponents.reduce((best, player) => Math.hypot(player.x - p1.x, player.y - p1.y) < Math.hypot(best.x - p1.x, best.y - p1.y) ? player : best); Object.assign(p2, nearest); }
 function handleNetworkMessageV2(message) {
   if (message.type === 'career-state') { applyCareerState(message); return; }
+  if (message.type === 'profile-update') {
+    const key = String(message.nick || '').toLowerCase();
+    const player = remotePlayers.get(key);
+    if (player) Object.assign(player, message.profile || {});
+    if (opponentProfile.nick?.toLowerCase() === key) Object.assign(opponentProfile, message.profile || {});
+    refreshPrimaryOpponent();
+    return;
+  }
   if (message.type === 'daily-box-reward') { applyDailyBoxReward(message.reward || {}); return; }
   if (message.type === 'leaf-gust') { if (message.teamId === teamId) return; const sourceX = (1 - message.x) * W; const sourceY = message.y * H; if (applyLeafGust(p1, sourceX, sourceY)) { burst(p1.x, p1.y, '#b7df78', 18); setToast('PODMUCH LIŚCI // OGŁUSZENIE'); } return; }
   if (message.type === 'chat') { showChatBubble(message.nick || 'GRACZ', message.text || ''); return; }
@@ -1433,7 +1450,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   charactersSection.append(wizardOffers, wizardDetail);
   keychainsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="keychains">OTWÓRZ SKRZYNIĘ Z BRELOCZKAMI</button><div class="keychain-collection"></div><div class="shop-chest-result" id="shopKeychainChestResult"></div>`;
   hatsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="hats">OTWÓRZ SKRZYNIĘ Z KAPELUSZAMI</button><div class="hat-collection"></div><div class="shop-chest-result" id="shopHatChestResult"></div>`;
-  skinsSection.innerHTML = `<section class="skin-shop" aria-labelledby="skinShopTitle"><div class="eyebrow">ARCANE MARKET / SKINY</div><h4 id="skinShopTitle">SKINY CZARODZIEJÓW</h4><p class="skin-shop-note">Skiny są dołączone do odpowiednich karnetów.</p><div id="skinOffers" class="skin-offers"></div><p id="skinShopEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH SKINÓW</p></section>`;
+  skinsSection.innerHTML = `<section class="skin-shop" aria-labelledby="skinShopTitle"><div class="eyebrow">ARCANE MARKET / SKINY</div><h4 id="skinShopTitle">SKINY CZARODZIEJÓW</h4><p class="skin-shop-note">Kupuj skiny za monety bez wymaganej rangi. Możesz założyć dowolny posiadany skin.</p><div id="skinOffers" class="skin-offers"></div><p id="skinShopEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH SKINÓW</p><p id="skinShopStatus" class="pass-shop-status" role="status"></p></section>`;
   keychainsSection.appendChild(ownedEmpty.cloneNode(true));
   hatsSection.appendChild(ownedEmpty.cloneNode(true));
   passesSection.append(passShop);
@@ -1465,10 +1482,9 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     if (mode === 'passes') window.updatePassShop?.();
   });
   skinsSection.addEventListener('click', event => {
-    const button = event.target.closest('[data-skin-pass]');
+    const button = event.target.closest('[data-skin-action]');
     if (!button) return;
-    tabs.querySelector('[data-shop="passes"]').click();
-    window.selectPass?.(button.dataset.skinPass);
+    window.handleMageSkinAction?.(button.dataset.skinAction, button.dataset.skinId);
   });
   window.refreshShopCollections = function () {
     const shopKeychains = keychainsSection.querySelector('.keychain-collection');
@@ -3121,45 +3137,13 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     const empty = document.getElementById('skinShopEmpty');
     if (!offers || !empty) return;
 
-    const account = currentUser ? playerData[currentUser] : null;
-    const skins = [
-      {
-        passId: 'vip',
-        name: 'ZŁOTY',
-        colors: 'TY: ŻÓŁTY // PRZECIWNIK: FIOLETOWY // SOJUSZNIK: ZIELONY',
-        value: 10000,
-        multiplier: 'x1,25',
-        owned: Boolean(account?.ownedPass?.includes('vip') || account?.vip)
-      },
-      {
-        passId: 'svip',
-        name: 'ISKRA',
-        colors: 'TY: POMARAŃCZOWY // PRZECIWNIK: NIEBIESKI // SOJUSZNIK: TURKUSOWY',
-        value: 23000,
-        multiplier: 'x1,50',
-        owned: Boolean(account?.ownedPass?.includes('svip') || account?.svip)
-      },
-      {
-        passId: 'gvip',
-        name: 'WIOSENNY',
-        colors: 'TY: ZIELONY // PRZECIWNIK: RÓŻOWY // SOJUSZNIK: POMARAŃCZOWY',
-        value: 35000,
-        multiplier: 'x1,75',
-        owned: Boolean(account?.ownedPass?.includes('gvip') || account?.gvip)
-      },
-      {
-        passId: 'premium',
-        name: 'MONOCHROMATYCZNY',
-        colors: 'TY: BIAŁY // PRZECIWNIK: CZARNY // SOJUSZNIK: SZARY',
-        value: 50000,
-        multiplier: 'x2',
-        owned: Boolean(account?.ownedPass?.includes('premium') || account?.premium)
-      }
-    ].filter(skin => !ownedOnly || skin.owned);
+    const skins = Object.entries(mageSkins)
+      .map(([id, skin]) => ({ id, ...skin, owned: ownsMageSkin(id), equipped: getEquippedMageSkin() === id }))
+      .filter(skin => !ownedOnly || skin.owned);
     offers.replaceChildren();
     skins.forEach(skin => {
       const card = document.createElement('article');
-      card.className = `skin-card${skin.owned ? ' owned' : ''}`;
+      card.className = `skin-card${skin.owned ? ' owned' : ''}${skin.equipped ? ' equipped' : ''}`;
 
       const name = document.createElement('strong');
       name.textContent = skin.name;
@@ -3167,18 +3151,67 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       source.textContent = skin.colors;
       const status = document.createElement('small');
       status.textContent = skin.owned
-        ? `ODBLOKOWANY // MNOŻNIK PIENIĘDZY ${skin.multiplier}`
-        : `WARTOŚĆ ${skin.value.toLocaleString('pl-PL')} MONET // DOSTAJESZ Z KARNETU ${skin.passId.toUpperCase()}`;
+        ? skin.equipped ? 'ZAŁOŻONY' : 'POSIADANY'
+        : `CENA ${skin.value.toLocaleString('pl-PL')} MONET`;
       const button = document.createElement('button');
       button.type = 'button';
-      button.dataset.skinPass = skin.passId;
-      button.textContent = skin.owned ? `KARNET ${skin.passId.toUpperCase()}` : `ODBLOKUJ Z ${skin.passId.toUpperCase()}`;
+      button.dataset.skinId = skin.id;
+      button.dataset.skinAction = skin.owned ? (skin.equipped ? 'unequip' : 'equip') : 'buy';
+      button.textContent = skin.owned ? (skin.equipped ? 'ZDEJMIJ' : 'ZAŁÓŻ') : `KUP // ${skin.value.toLocaleString('pl-PL')} MONET`;
 
       card.append(name, source, status, button);
       offers.appendChild(card);
     });
     empty.classList.toggle('hidden', !ownedOnly || skins.length > 0);
   };
+  window.handleMageSkinAction = function (action, id) {
+    const skin = mageSkins[id];
+    if (!currentUser || !skin) return;
+    const status = document.getElementById('skinShopStatus');
+    const key = currentUser.toLowerCase();
+
+    if (action === 'buy') {
+      if (ownsMageSkin(id)) {
+        status.textContent = `SKIN ${skin.name} JEST JUŻ POSIADANY`;
+        window.refreshSkinShop();
+        return;
+      };
+      if (coins < skin.value) {
+        status.textContent = `BRAKUJE ${(skin.value - coins).toLocaleString('pl-PL')} MONET`;
+        return;
+      }
+      coins -= skin.value;
+      persistCoins();
+      const inventory = getMap('arcanaSkins');
+      inventory[key] = Array.from(new Set([...(inventory[key] || []), id]));
+      saveMap('arcanaSkins', inventory);
+      status.textContent = `KUPIONO SKIN ${skin.name}`;
+      updateShop();
+      window.refreshSkinShop();
+      return;
+    }
+
+    if (!ownsMageSkin(id)) {
+      status.textContent = 'NAJPIERW KUP TEN SKIN LUB ODBLOKUJ GO Z KARNETU';
+      return;
+    }
+    const equipped = getMap('arcanaEquippedSkin');
+    if (action === 'equip') {
+      const inventory = getMap('arcanaSkins');
+      inventory[key] = Array.from(new Set([...(inventory[key] || []), id]));
+      saveMap('arcanaSkins', inventory);
+      equipped[key] = id;
+      status.textContent = `ZAŁOŻONO SKIN ${skin.name}`;
+    } else if (action === 'unequip' && equipped[key] === id) {
+      equipped[key] = '';
+      status.textContent = `ZDJĘTO SKIN ${skin.name}`;
+    } else {
+      return;
+    }
+    saveMap('arcanaEquippedSkin', equipped);
+    syncProfileToServer();
+    window.refreshSkinShop();
+  }
 
   function getPolishDateParts(date = new Date()) {
     const parts = new Intl.DateTimeFormat('en-GB', {
