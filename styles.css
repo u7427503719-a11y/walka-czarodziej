@@ -184,10 +184,19 @@ h1 { margin: 7px 0 0; font: 700 23px/1 'Barlow Condensed', sans-serif; letter-sp
 .pass-offers { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 .pass-offers button { min-height: 68px; padding: 10px 8px; border: 1px solid var(--line); background: rgba(7,25,34,.78); color: var(--ink); cursor: pointer; text-align: left; }
 .pass-offers button.active { border-color: var(--cyan); box-shadow: inset 0 0 0 1px var(--cyan); }
+.pass-offers button.selected { outline: 1px solid var(--orange); outline-offset: 2px; }
 .pass-offers b, .pass-offers span { display: block; }
 .pass-offers b { color: var(--cyan); font: 700 15px 'Barlow Condensed'; letter-spacing: .08em; }
 .pass-offers span { margin-top: 6px; color: var(--muted); font-size: 9px; letter-spacing: .06em; }
 .pass-shop-status, .backpack-result { min-height: 18px; margin-top: 10px; color: var(--cyan); font-size: 10px; letter-spacing: .06em; }
+.pass-details { margin-top: 14px; padding: 14px; border: 1px solid var(--line); background: rgba(7,25,34,.78); }
+.pass-details h5 { margin: 4px 0 8px; color: var(--cyan); font: 700 18px 'Barlow Condensed'; }
+.pass-benefits { display: grid; gap: 5px; margin: 8px 0; padding-left: 16px; color: var(--ink); font-size: 10px; line-height: 1.5; }
+#passDailyStatus { margin: 6px 0; color: var(--muted); font-size: 10px; line-height: 1.5; }
+.pass-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.pass-actions button { min-height: 36px; padding: 9px 12px; border: 1px solid var(--cyan); background: rgba(115,225,221,.08); color: var(--cyan); cursor: pointer; font: 700 9px 'Space Grotesk'; letter-spacing: .06em; }
+.pass-actions button.danger { border-color: var(--red); background: rgba(255,60,90,.08); color: var(--red); }
+.pass-actions button:disabled { opacity: .45; cursor: not-allowed; }
 .backpack-category { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
 .backpack-category-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
 .backpack-category-heading h4 { margin: 0; color: var(--cyan); font: 700 18px 'Barlow Condensed'; letter-spacing: .08em; }
