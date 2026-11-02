@@ -12,6 +12,7 @@ const root = __dirname;
 const rooms = new Map();
 const activeSocketsByNick = new Map();
 const sessionTokens = new Map();
+const activeSessionsByNick = new Map();
 const groups = new Map();
 const tradeSessions = new Map();
 const randomQueues = new Map([['1v1', []], ['2v2', []], ['1v2', []], ['1v3', []]]);
@@ -22,6 +23,7 @@ const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-cz
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
 const restrictedOwnerNick = 'szymon';
+const ownerNicks = ['adam', 'szymon'];
 const progressMapNames = [
   'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
   'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
@@ -29,8 +31,6 @@ const progressMapNames = [
   'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
   'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
 ];
-const ownerNick = 'szymon';
-
 function readAccounts() {
   let contents;
   try { contents = fs.readFileSync(accountFile, 'utf8'); }
@@ -92,8 +92,32 @@ function verifyAccountPassword(account, password) {
 
 function issueSessionToken(account) {
   const token = crypto.randomBytes(32).toString('hex');
-  sessionTokens.set(token, { accountHash: account.hash, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  sessionTokens.set(token, { accountHash: account.hash, accountKey: account.nick.toLowerCase(), expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
   return token;
+}
+
+function hasActiveSession(accountKey) {
+  const token = activeSessionsByNick.get(accountKey);
+  if (!token) return false;
+  const session = sessionTokens.get(token);
+  if (session && session.expiresAt > Date.now()) return true;
+  activeSessionsByNick.delete(accountKey);
+  sessionTokens.delete(token);
+  const socket = activeSocketsByNick.get(accountKey);
+  if (socket?.sessionToken === token) {
+    activeSocketsByNick.delete(accountKey);
+    socket.close(1008, 'Session expired');
+  }
+  return false;
+}
+
+function releaseSession(token) {
+  const session = sessionTokens.get(token);
+  if (!session) return;
+  sessionTokens.delete(token);
+  if (activeSessionsByNick.get(session.accountKey) === token) activeSessionsByNick.delete(session.accountKey);
+  const socket = activeSocketsByNick.get(session.accountKey);
+  if (socket?.sessionToken === token) socket.close(1000, 'Logged out');
 }
 
 function writeAccounts(accounts) {
@@ -103,16 +127,19 @@ function writeAccounts(accounts) {
 
 function migrateOwnerAccount() {
   const accounts = readAccounts();
-  const ownerEntry = findAccountEntry(accounts, ownerNick);
-  if (!ownerEntry) throw new Error(`KONTO "${ownerNick}" MUSI ISTNIEĆ PRZED NADANIEM ROLI WŁAŚCICIELA`);
-  const [storedOwnerKey, owner] = ownerEntry;
-  const ownerKey = ownerNick.toLowerCase();
-  if (storedOwnerKey !== ownerKey) delete accounts[storedOwnerKey];
-  owner.nick = normalizeNick(owner.nick) || ownerNick;
-  owner.role = 'owner';
-  accounts[ownerKey] = owner;
+  for (const nick of ownerNicks) {
+    const ownerEntry = findAccountEntry(accounts, nick);
+    if (!ownerEntry) throw new Error(`KONTO "${nick}" MUSI ISTNIEĆ PRZED NADANIEM ROLI WŁAŚCICIELA`);
+    const [storedOwnerKey, owner] = ownerEntry;
+    const ownerKey = nick.toLowerCase();
+    if (storedOwnerKey !== ownerKey) delete accounts[storedOwnerKey];
+    owner.nick = normalizeNick(owner.nick) || nick;
+    owner.role = 'owner';
+    accounts[ownerKey] = owner;
+  }
+  const ownerKeys = new Set(ownerNicks);
   for (const [key, account] of Object.entries(accounts)) {
-    if (key !== ownerKey && account?.role === 'owner') account.role = 'user';
+    if (!ownerKeys.has(key) && account?.role === 'owner') account.role = 'user';
   }
   writeAccounts(accounts);
 }
@@ -223,8 +250,10 @@ function sanitizeAccountProgress(progress) {
 }
 
 function verifyOwnerCredentials(nick, password, accounts) {
-  if (String(nick || '').trim().toLowerCase() !== ownerNick) return false;
-  const account = accounts[ownerNick];
+  const ownerKey = String(nick || '').trim().toLowerCase();
+  if (!ownerNicks.includes(ownerKey)) return false;
+  const account = accounts[ownerKey];
+  if (account?.role !== 'owner') return false;
   if (!account?.salt || !account?.hash) return false;
   const actual = Buffer.from(hashPassword(String(password || ''), account.salt).hash, 'hex');
   const expected = Buffer.from(account.hash, 'hex');
@@ -257,11 +286,11 @@ async function handleAuthRequest(request, response) {
     const accountEntry = findAccountEntry(accounts, nick);
     let account = accountEntry?.[1];
     if (action === 'register') {
-      if (key === ownerNick) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
+      if (ownerNicks.includes(key)) { sendJson(response, 403, { error: 'TA NAZWA JEST ZAREZERWOWANA' }); return true; }
       if (accountEntry) { sendJson(response, 409, { error: 'TAKIE KONTO JUŻ ISTNIEJE' }); return true; }
       if (activeSocketsByNick.get(key)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
       const credentials = hashPassword(password);
-      account = { nick, ...credentials, role: key === ownerNick ? 'owner' : 'user' };
+      account = { nick, ...credentials, role: 'user' };
       accounts[key] = account;
     } else if (!account) { sendJson(response, 404, { error: 'KONTO O PODANYM NICKU NIE ISTNIEJE NA SERWERZE' }); return true; }
     else {
@@ -271,10 +300,13 @@ async function handleAuthRequest(request, response) {
     }
     if (action === 'login') {
       const sessionKey = account.nick.toLowerCase();
-      if (activeSocketsByNick.get(sessionKey)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
+      if (hasActiveSession(sessionKey) || activeSocketsByNick.get(sessionKey)?.readyState === WebSocket.OPEN) {
+        sendJson(response, 409, { error: 'TO KONTO JEST JUŻ UŻYWANE NA INNYM URZĄDZENIU' }); return true;
+      }
     }
     writeAccounts(accounts);
     const sessionToken = issueSessionToken(account);
+    if (action === 'register' || action === 'login') activeSessionsByNick.set(account.nick.toLowerCase(), sessionToken);
     sendJson(response, action === 'register' ? 201 : 200, {
       account: publicAccount(account),
       progress: action === 'login' ? account.progress || null : null,
@@ -284,11 +316,12 @@ async function handleAuthRequest(request, response) {
   }
 
   if (action === 'logout') {
-    const session = sessionTokens.get(String(input.sessionToken || ''));
+    const token = String(input.sessionToken || '');
+    const session = sessionTokens.get(token);
     if (!session || session.expiresAt <= Date.now()) {
       sendJson(response, 401, { error: 'SESJA WYGASŁA' }); return true;
     }
-    sessionTokens.delete(String(input.sessionToken));
+    releaseSession(token);
     sendJson(response, 200, { loggedOut: true });
     return true;
   }
@@ -328,6 +361,9 @@ async function handleAuthRequest(request, response) {
     const accountEntry = findAccountEntry(accounts, input.currentNick);
     const account = accountEntry?.[1];
     if (!account) { sendJson(response, 404, { error: 'NIE ZNALEZIONO KONTA' }); return true; }
+    if (action === 'change-nick' && account.role === 'owner') {
+      sendJson(response, 403, { error: 'WŁAŚCICIEL NIE MOŻE ZMIENIĆ NICKU KONTA' }); return true;
+    }
     const actual = Buffer.from(hashPassword(String(input.currentPassword || ''), account.salt).hash, 'hex');
     const expected = Buffer.from(account.hash, 'hex');
     if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWE OBECNE HASŁO' }); return true; }
@@ -339,15 +375,41 @@ async function handleAuthRequest(request, response) {
       delete accounts[accountEntry[0]];
       account.nick = nextNick;
       accounts[nextKey] = account;
+      const activeToken = activeSessionsByNick.get(accountEntry[0]);
+      if (activeToken) {
+        activeSessionsByNick.delete(accountEntry[0]);
+        activeSessionsByNick.set(nextKey, activeToken);
+        const activeSession = sessionTokens.get(activeToken);
+        if (activeSession) activeSession.accountKey = nextKey;
+      }
+      const activeSocket = activeSocketsByNick.get(accountEntry[0]);
+      if (activeSocket) {
+        activeSocketsByNick.delete(accountEntry[0]);
+        activeSocket.nick = nextNick;
+        activeSocketsByNick.set(nextKey, activeSocket);
+      }
     } else {
       const newPassword = String(input.newPassword || '');
       if (newPassword.length < 4 || newPassword.length > 128 || newPassword !== input.confirmPassword) { sendJson(response, 400, { error: 'NOWE HASŁA MUSZĄ BYĆ TAKIE SAME I MIEĆ 4-128 ZNAKÓW' }); return true; }
       Object.assign(account, hashPassword(newPassword));
     }
     writeAccounts(accounts);
+    if (action === 'change-password') {
+      const oldToken = activeSessionsByNick.get(account.nick.toLowerCase());
+      const newToken = issueSessionToken(account);
+      if (oldToken) {
+        const oldSession = sessionTokens.get(oldToken);
+        if (oldSession) {
+          sessionTokens.delete(oldToken);
+          const socket = activeSocketsByNick.get(account.nick.toLowerCase());
+          if (socket?.sessionToken === oldToken) socket.sessionToken = newToken;
+        }
+      }
+      activeSessionsByNick.set(account.nick.toLowerCase(), newToken);
+    }
     sendJson(response, 200, {
       account: publicAccount(account),
-      ...(action === 'change-password' ? { sessionToken: issueSessionToken(account) } : {})
+      ...(action === 'change-password' ? { sessionToken: activeSessionsByNick.get(account.nick.toLowerCase()) } : {})
     });
     return true;
   }
@@ -370,7 +432,7 @@ async function handleOwnerRequest(request, response) {
     const role = String(input.role || '');
     if (!target) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
     if (!['admin', 'half-admin', 'user'].includes(role)) { sendJson(response, 400, { error: 'NIEPRAWIDŁOWA ROLA' }); return; }
-    if ((target[0] === ownerNick || normalizeNick(target[1].nick).toLowerCase() === ownerNick) && role !== 'owner') { sendJson(response, 403, { error: 'NIE MOŻNA ZMIENIĆ ROLI WŁAŚCICIELA' }); return; }
+    if (ownerNicks.includes(normalizeNick(target[1].nick || target[0]).toLowerCase()) && role !== 'owner') { sendJson(response, 403, { error: 'NIE MOŻNA ZMIENIĆ ROLI WŁAŚCICIELA' }); return; }
     target[1].role = role;
     writeAccounts(accounts);
     sendJson(response, 200, { account: publicAccount(target[1]) });
@@ -498,7 +560,9 @@ webSocketServer.on('connection', socket => {
       const session = sessionTokens.get(token);
       const accounts = readAccounts();
       const accountEntry = findAccountEntry(accounts, message.nick);
-      if (!session || session.expiresAt <= Date.now() || !accountEntry || session.accountHash !== accountEntry[1].hash) {
+      if (!session || session.expiresAt <= Date.now() || !accountEntry ||
+          session.accountHash !== accountEntry[1].hash ||
+          activeSessionsByNick.get(accountEntry[0]) !== token) {
         sendSocialError(socket, 'account', 'SESJA WYGASŁA // ZALOGUJ SIĘ PONOWNIE');
         socket.close(1008, 'Invalid session');
         return;
@@ -518,13 +582,14 @@ webSocketServer.on('connection', socket => {
       return;
     }
     if (message.type === 'logout') {
-      if (socket.sessionToken) sessionTokens.delete(socket.sessionToken);
+      if (socket.sessionToken) releaseSession(socket.sessionToken);
       socket.close(1000, 'Logged out');
       return;
     }
     const activeSession = sessionTokens.get(socket.sessionToken);
     if (!socket.nick) return;
-    if (!activeSession || activeSession.expiresAt <= Date.now()) {
+    if (!activeSession || activeSession.expiresAt <= Date.now() ||
+        activeSessionsByNick.get(socket.nick.toLowerCase()) !== socket.sessionToken) {
       sendSocialError(socket, 'account', 'SESJA WYGASŁA // ZALOGUJ SIĘ PONOWNIE');
       socket.close(1008, 'Session expired');
       return;
