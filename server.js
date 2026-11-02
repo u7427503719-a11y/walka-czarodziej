@@ -21,6 +21,7 @@ const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascr
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
+const restrictedOwnerNick = 'szymon';
 const progressMapNames = [
   'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
   'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
@@ -28,8 +29,7 @@ const progressMapNames = [
   'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
   'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
 ];
-const ownerNick = 'adam';
-const previousOwnerNicks = ['adam1', 'adam1właściciel', 'adam2właściciel'];
+const ownerNick = 'szymon';
 
 function readAccounts() {
   let contents;
@@ -103,23 +103,14 @@ function writeAccounts(accounts) {
 
 function migrateOwnerAccount() {
   const accounts = readAccounts();
+  const ownerEntry = findAccountEntry(accounts, ownerNick);
+  if (!ownerEntry) throw new Error(`KONTO "${ownerNick}" MUSI ISTNIEĆ PRZED NADANIEM ROLI WŁAŚCICIELA`);
+  const [storedOwnerKey, owner] = ownerEntry;
   const ownerKey = ownerNick.toLowerCase();
-  let owner = accounts[ownerKey];
-  if (!owner) {
-    const previousOwnerKey = previousOwnerNicks.map(nick => nick.toLowerCase()).find(key => key !== ownerKey && accounts[key]);
-    if (previousOwnerKey) {
-      owner = accounts[previousOwnerKey];
-      delete accounts[previousOwnerKey];
-    }
-  }
-  if (!owner) owner = { nick: ownerNick, ...hashPassword('admin123') };
-  owner.nick = ownerNick;
+  if (storedOwnerKey !== ownerKey) delete accounts[storedOwnerKey];
+  owner.nick = normalizeNick(owner.nick) || ownerNick;
   owner.role = 'owner';
   accounts[ownerKey] = owner;
-  for (const nick of previousOwnerNicks) {
-    const key = nick.toLowerCase();
-    if (key !== ownerKey) delete accounts[key];
-  }
   for (const [key, account] of Object.entries(accounts)) {
     if (key !== ownerKey && account?.role === 'owner') account.role = 'user';
   }
@@ -386,6 +377,9 @@ async function handleOwnerRequest(request, response) {
     return;
   }
   if (action === 'reset-ranking') {
+    if (String(input.ownerNick || '').trim().toLowerCase() === restrictedOwnerNick) {
+      sendJson(response, 403, { error: 'TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA' }); return;
+    }
     const career = readCareer();
     for (const player of Object.values(career.players)) player.rankPoints = 0;
     writeCareer(career);
@@ -393,6 +387,9 @@ async function handleOwnerRequest(request, response) {
     return;
   }
   if (action !== 'grant-wizard') { sendJson(response, 404, { error: 'NIEZNANA OPERACJA' }); return; }
+  if (String(input.ownerNick || '').trim().toLowerCase() === restrictedOwnerNick) {
+    sendJson(response, 403, { error: 'TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA' }); return;
+  }
   const targetEntry = findAccountEntry(accounts, input.targetNick);
   if (!targetEntry) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
   const target = targetEntry[1];
