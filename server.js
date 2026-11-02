@@ -11,6 +11,7 @@ const host = process.env.HOST || '0.0.0.0';
 const root = __dirname;
 const rooms = new Map();
 const activeSocketsByNick = new Map();
+const sessionTokens = new Map();
 const groups = new Map();
 const tradeSessions = new Map();
 const randomQueues = new Map([['1v1', []], ['2v2', []], ['1v2', []], ['1v3', []]]);
@@ -54,6 +55,45 @@ function findAccountEntry(accounts, nick) {
   return Object.entries(accounts).find(([key, account]) =>
     normalizeNick(account?.nick || key).toLowerCase() === normalizedNick
   ) || null;
+}
+
+function getAccountProgressValue(account, mapName) {
+  const entry = account?.progress?.maps?.[mapName];
+  if (entry && typeof entry === 'object' && Object.prototype.hasOwnProperty.call(entry, '__arcanaValue')) return entry.__arcanaValue;
+  return entry;
+}
+
+function setAccountProgressValue(account, mapName, value) {
+  account.progress ||= { account: { coins: 0 }, maps: {} };
+  account.progress.maps ||= {};
+  account.progress.maps[mapName] = { __arcanaValue: value };
+}
+
+function accountFriends(account) {
+  const friends = getAccountProgressValue(account, 'arcanaFriends');
+  return Array.isArray(friends) ? friends.map(nick => String(nick).toLowerCase()) : [];
+}
+
+function accountFriendRequests(account) {
+  const requests = getAccountProgressValue(account, 'arcanaFriendRequests');
+  return Array.isArray(requests) ? requests : [];
+}
+
+function areAccountFriends(account, nick) {
+  return accountFriends(account).includes(normalizeNick(nick).toLowerCase());
+}
+
+function verifyAccountPassword(account, password) {
+  if (!account?.salt || !account.hash) return false;
+  const actual = Buffer.from(hashPassword(String(password || ''), account.salt).hash, 'hex');
+  const expected = Buffer.from(account.hash, 'hex');
+  return actual.length === expected.length && crypto.timingSafeEqual(actual, expected);
+}
+
+function issueSessionToken(account) {
+  const token = crypto.randomBytes(32).toString('hex');
+  sessionTokens.set(token, { accountHash: account.hash, expiresAt: Date.now() + 24 * 60 * 60 * 1000 });
+  return token;
 }
 
 function writeAccounts(accounts) {
@@ -243,10 +283,22 @@ async function handleAuthRequest(request, response) {
       if (activeSocketsByNick.get(sessionKey)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
     }
     writeAccounts(accounts);
+    const sessionToken = issueSessionToken(account);
     sendJson(response, action === 'register' ? 201 : 200, {
       account: publicAccount(account),
-      progress: action === 'login' ? account.progress || null : null
+      progress: action === 'login' ? account.progress || null : null,
+      sessionToken
     });
+    return true;
+  }
+
+  if (action === 'logout') {
+    const session = sessionTokens.get(String(input.sessionToken || ''));
+    if (!session || session.expiresAt <= Date.now()) {
+      sendJson(response, 401, { error: 'SESJA WYGASŁA' }); return true;
+    }
+    sessionTokens.delete(String(input.sessionToken));
+    sendJson(response, 200, { loggedOut: true });
     return true;
   }
 
@@ -267,6 +319,17 @@ async function handleAuthRequest(request, response) {
     account.progress = progress;
     writeAccounts(accounts);
     sendJson(response, 200, { account: publicAccount(account), progress });
+    return true;
+  }
+
+  if (action === 'check-account') {
+    const requester = findAccountEntry(accounts, nick)?.[1];
+    if (!requester || !verifyAccountPassword(requester, password)) {
+      sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true;
+    }
+    const target = findAccountEntry(accounts, input.targetNick);
+    if (!target) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return true; }
+    sendJson(response, 200, { account: publicAccount(target[1]) });
     return true;
   }
 
@@ -291,7 +354,10 @@ async function handleAuthRequest(request, response) {
       Object.assign(account, hashPassword(newPassword));
     }
     writeAccounts(accounts);
-    sendJson(response, 200, { account: publicAccount(account) });
+    sendJson(response, 200, {
+      account: publicAccount(account),
+      ...(action === 'change-password' ? { sessionToken: issueSessionToken(account) } : {})
+    });
     return true;
   }
 
@@ -311,7 +377,8 @@ async function handleOwnerRequest(request, response) {
   if (action === 'set-role') {
     const target = findAccountEntry(accounts, input.targetNick);
     const role = String(input.role || '');
-    if (!target || !['admin', 'half-admin', 'user'].includes(role)) { sendJson(response, 400, { error: 'NIEPRAWIDŁOWY GRACZ LUB ROLA' }); return; }
+    if (!target) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
+    if (!['admin', 'half-admin', 'user'].includes(role)) { sendJson(response, 400, { error: 'NIEPRAWIDŁOWA ROLA' }); return; }
     if ((target[0] === ownerNick || normalizeNick(target[1].nick).toLowerCase() === ownerNick) && role !== 'owner') { sendJson(response, 403, { error: 'NIE MOŻNA ZMIENIĆ ROLI WŁAŚCICIELA' }); return; }
     target[1].role = role;
     writeAccounts(accounts);
@@ -326,9 +393,9 @@ async function handleOwnerRequest(request, response) {
     return;
   }
   if (action !== 'grant-wizard') { sendJson(response, 404, { error: 'NIEZNANA OPERACJA' }); return; }
-  const targetKey = String(input.targetNick || '').trim().toLowerCase();
-  const target = accounts[targetKey];
-  if (!target) { sendJson(response, 404, { error: 'NIE ZNALEZIONO KONTA GRACZA' }); return; }
+  const targetEntry = findAccountEntry(accounts, input.targetNick);
+  if (!targetEntry) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
+  const target = targetEntry[1];
   target.wizards = Array.from(new Set([...(Array.isArray(target.wizards) ? target.wizards : []), 'october']));
   writeAccounts(accounts);
   sendJson(response, 200, { account: publicAccount(target) });
@@ -373,6 +440,19 @@ const server = http.createServer((request, response) => {
 const webSocketServer = new WebSocket.Server({ server });
 function send(socket, message) { if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message)); }
 function broadcast(room, sender, message) { room.forEach(socket => { if (socket !== sender) send(socket, message); }); }
+function sendSocialError(socket, context, message) { send(socket, { type: 'social-error', context, message }); }
+function sendFriendState(account, notice = '') {
+  const nick = normalizeNick(account?.nick).toLowerCase();
+  const socket = activeSocketsByNick.get(nick);
+  if (!socket) return;
+  const friends = getAccountProgressValue(account, 'arcanaFriends');
+  send(socket, {
+    type: 'friend-state',
+    friends: Array.isArray(friends) ? friends : [],
+    requests: accountFriendRequests(account),
+    notice
+  });
+}
 function safeTradeOffer(offer = {}) { return { items: Array.isArray(offer.items) ? offer.items.slice(0, 100).map(item => ({ id: String(item.id || '').slice(0, 64), label: String(item.label || '').slice(0, 80) })).filter(item => /^(keychain|hat|wizard):[a-z0-9-]+$/i.test(item.id)) : [], coins: Math.max(0, Math.min(1e9, Number(offer.coins) || 0)) }; }
 function groupState(group) { return { type: 'group-state', groupId: group.id, members: [...group.members].map(player => player.nick) }; }
 function removeFromQueue(socket) { for (const queues of [randomQueues, rankedQueues]) for (const queue of queues.values()) { const index = queue.findIndex(party => party.members.has(socket)); if (index >= 0) queue.splice(index, 1); } }
@@ -417,31 +497,117 @@ webSocketServer.on('connection', socket => {
     let message;
     try { message = JSON.parse(rawMessage); } catch { return; }
     if (message.type === 'hello') {
-      socket.nick = String(message.nick || '').trim().slice(0, 24);
-      if (!socket.nick) return;
+      const token = String(message.sessionToken || '');
+      const session = sessionTokens.get(token);
+      const accounts = readAccounts();
+      const accountEntry = findAccountEntry(accounts, message.nick);
+      if (!session || session.expiresAt <= Date.now() || !accountEntry || session.accountHash !== accountEntry[1].hash) {
+        sendSocialError(socket, 'account', 'SESJA WYGASŁA // ZALOGUJ SIĘ PONOWNIE');
+        socket.close(1008, 'Invalid session');
+        return;
+      }
+      const existingSocket = activeSocketsByNick.get(accountEntry[0]);
+      if (existingSocket && existingSocket !== socket && existingSocket.readyState === WebSocket.OPEN) {
+        sendSocialError(socket, 'account', 'TO KONTO JEST JUŻ POŁĄCZONE');
+        socket.close(1008, 'Account already connected');
+        return;
+      }
+      socket.sessionToken = token;
+      socket.nick = accountEntry[1].nick;
       socket.profile = safeProfile(message.profile);
       activeSocketsByNick.set(socket.nick.toLowerCase(), socket);
       send(socket, { type: 'hello', nick: socket.nick });
+      sendFriendState(accountEntry[1]);
+      return;
+    }
+    if (message.type === 'logout') {
+      if (socket.sessionToken) sessionTokens.delete(socket.sessionToken);
+      socket.close(1000, 'Logged out');
+      return;
+    }
+    const activeSession = sessionTokens.get(socket.sessionToken);
+    if (!socket.nick) return;
+    if (!activeSession || activeSession.expiresAt <= Date.now()) {
+      sendSocialError(socket, 'account', 'SESJA WYGASŁA // ZALOGUJ SIĘ PONOWNIE');
+      socket.close(1008, 'Session expired');
+      return;
+    }
+    if (message.type === 'friend-request') {
+      const accounts = readAccounts();
+      const senderEntry = findAccountEntry(accounts, socket.nick);
+      const targetEntry = findAccountEntry(accounts, message.targetNick);
+      if (!senderEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (!targetEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (senderEntry[0] === targetEntry[0]) { sendSocialError(socket, 'friend', 'NIE MOŻESZ DODAĆ SIEBIE DO ZNAJOMYCH'); return; }
+      if (areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'friend', 'TEN GRACZ JUŻ JEST ZNAJOMYM'); return; }
+      const requests = accountFriendRequests(targetEntry[1]);
+      if (requests.some(nick => String(nick).toLowerCase() === senderEntry[1].nick.toLowerCase())) {
+        sendSocialError(socket, 'friend', 'ZAPROSZENIE JUŻ WYSŁANE');
+        return;
+      }
+      requests.push(senderEntry[1].nick);
+      setAccountProgressValue(targetEntry[1], 'arcanaFriendRequests', requests);
+      writeAccounts(accounts);
+      send(socket, { type: 'friend-request-sent', targetNick: targetEntry[1].nick });
+      sendFriendState(targetEntry[1]);
+      return;
+    }
+    if (message.type === 'friend-response') {
+      const accounts = readAccounts();
+      const recipientEntry = findAccountEntry(accounts, socket.nick);
+      const senderEntry = findAccountEntry(accounts, message.targetNick);
+      if (!recipientEntry || !senderEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      const requests = accountFriendRequests(recipientEntry[1]);
+      const requestIndex = requests.findIndex(nick => String(nick).toLowerCase() === senderEntry[1].nick.toLowerCase());
+      if (requestIndex < 0) { sendSocialError(socket, 'friend', 'ZAPROSZENIE JUŻ NIE JEST AKTUALNE'); return; }
+      requests.splice(requestIndex, 1);
+      setAccountProgressValue(recipientEntry[1], 'arcanaFriendRequests', requests);
+      if (message.accepted === true) {
+        const recipientFriends = getAccountProgressValue(recipientEntry[1], 'arcanaFriends');
+        const senderFriends = getAccountProgressValue(senderEntry[1], 'arcanaFriends');
+        const updatedRecipientFriends = Array.isArray(recipientFriends) ? recipientFriends : [];
+        const updatedSenderFriends = Array.isArray(senderFriends) ? senderFriends : [];
+        if (!updatedRecipientFriends.some(nick => String(nick).toLowerCase() === senderEntry[1].nick.toLowerCase())) updatedRecipientFriends.push(senderEntry[1].nick);
+        if (!updatedSenderFriends.some(nick => String(nick).toLowerCase() === recipientEntry[1].nick.toLowerCase())) updatedSenderFriends.push(recipientEntry[1].nick);
+        setAccountProgressValue(recipientEntry[1], 'arcanaFriends', updatedRecipientFriends);
+        setAccountProgressValue(senderEntry[1], 'arcanaFriends', updatedSenderFriends);
+      }
+      writeAccounts(accounts);
+      sendFriendState(recipientEntry[1], message.accepted === true ? `DODANO DO ZNAJOMYCH: ${senderEntry[1].nick}` : `ODRZUCONO ZAPROSZENIE: ${senderEntry[1].nick}`);
+      sendFriendState(senderEntry[1], message.accepted === true ? `${recipientEntry[1].nick} AKCEPTUJE ZAPROSZENIE` : `${recipientEntry[1].nick} ODRZUCA ZAPROSZENIE`);
       return;
     }
     if (message.type === 'group-invite') {
       if (!socket.nick || socket.room) return;
+      const accounts = readAccounts();
+      const senderEntry = findAccountEntry(accounts, socket.nick);
+      const targetEntry = findAccountEntry(accounts, message.targetNick);
+      if (!senderEntry || !targetEntry) { sendSocialError(socket, 'group', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (!areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'group', 'MOŻESZ ZAPROSIĆ DO GRUPY TYLKO ZNAJOMEGO'); return; }
       let group = socket.groupId && groups.get(socket.groupId);
-      if (!group) { group = { id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, members: new Set([socket]) }; groups.set(group.id, group); socket.groupId = group.id; }
-      const target = activeSocketsByNick.get(String(message.targetNick || '').toLowerCase());
-      if (!target || target === socket || target.room || target.groupId || group.members.size >= 3) { send(socket, { type: 'group-error', message: 'GRACZ JEST NIEDOSTĘPNY LUB GRUPA JEST PEŁNA' }); return; }
+      if (!group) { group = { id: `group-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, members: new Set([socket]), pendingInvites: new Set() }; groups.set(group.id, group); socket.groupId = group.id; }
+      const target = activeSocketsByNick.get(targetEntry[0]);
+      if (!target || target === socket || target.room || target.groupId || group.members.size >= 3) { sendSocialError(socket, 'group', 'ZNAJOMY JEST NIEDOSTĘPNY LUB GRUPA JEST PEŁNA'); return; }
+      group.pendingInvites.add(target);
       send(target, { type: 'group-invite', groupId: group.id, from: socket.nick });
       group.members.forEach(member => send(member, groupState(group)));
       return;
     }
     if (message.type === 'group-accept') {
       const group = groups.get(String(message.groupId || ''));
-      if (!group || group.members.size >= 3 || socket.groupId || socket.room) { send(socket, { type: 'group-error', message: 'ZAPROSZENIE WYGASŁO LUB GRUPA JEST PEŁNA' }); return; }
+      const accounts = readAccounts();
+      const inviteeEntry = findAccountEntry(accounts, socket.nick);
+      const invitedByFriend = group && [...group.members].some(member => {
+        const memberEntry = findAccountEntry(accounts, member.nick);
+        return memberEntry && inviteeEntry && areAccountFriends(memberEntry[1], inviteeEntry[1].nick);
+      });
+      if (!group || !group.pendingInvites?.has(socket) || !invitedByFriend || group.members.size >= 3 || socket.groupId || socket.room) { sendSocialError(socket, 'group', 'ZAPROSZENIE WYGASŁO LUB NIE JESTEŚ ZNAJOMYM'); return; }
+      group.pendingInvites.delete(socket);
       group.members.add(socket); socket.groupId = group.id;
       group.members.forEach(member => send(member, groupState(group)));
       return;
     }
-    if (message.type === 'group-reject') { const inviter = activeSocketsByNick.get(String(message.from || '').toLowerCase()); if (inviter) send(inviter, { type: 'group-error', message: `${socket.nick || 'GRACZ'} ODRZUCIŁ ZAPROSZENIE` }); return; }
+    if (message.type === 'group-reject') { const group = groups.get(String(message.groupId || '')); group?.pendingInvites?.delete(socket); const inviter = activeSocketsByNick.get(String(message.from || '').toLowerCase()); if (inviter) send(inviter, { type: 'group-error', message: `${socket.nick || 'GRACZ'} ODRZUCIŁ ZAPROSZENIE` }); return; }
     if (message.type === 'group-leave') { const group = socket.groupId && groups.get(socket.groupId); if (group) { group.members.delete(socket); socket.groupId = ''; if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } return; }
     if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile); if (socket.room) broadcast(rooms.get(socket.room), socket, { type: 'profile-update', nick: socket.nick, profile: socket.profile }); return; }
     if (message.type === 'chat' && socket.room) { const text = String(message.text || '').trim().slice(0, 120); if (text) broadcast(rooms.get(socket.room), null, { type: 'chat', nick: socket.nick, text }); return; }
@@ -476,11 +642,29 @@ webSocketServer.on('connection', socket => {
       send(socket, careerState(career, playerKey));
       return;
     }
-    if (message.type === 'trade-request' || message.type === 'trade-response') { const target = activeSocketsByNick.get(String(message.targetNick || message.toNick || '').toLowerCase()); if (target) send(target, { ...message, fromNick: socket.nick }); return; }
+    if (message.type === 'trade-request' || message.type === 'trade-response') {
+      const accounts = readAccounts();
+      const senderEntry = findAccountEntry(accounts, socket.nick);
+      const targetEntry = findAccountEntry(accounts, message.targetNick || message.toNick);
+      if (!senderEntry || !targetEntry) { sendSocialError(socket, 'trade', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (senderEntry[0] === targetEntry[0] || !areAccountFriends(senderEntry[1], targetEntry[1].nick)) {
+        sendSocialError(socket, 'trade', 'MOŻESZ WYMIENIAĆ SIĘ TYLKO ZE ZNAJOMYM');
+        return;
+      }
+      const target = activeSocketsByNick.get(targetEntry[0]);
+      if (!target || target === socket) { sendSocialError(socket, 'trade', 'ZNAJOMY JEST NIEDOSTĘPNY'); return; }
+      send(target, { ...message, fromNick: socket.nick, targetNick: targetEntry[1].nick });
+      return;
+    }
     if (message.type === 'trade-offer') {
-      const targetNick = String(message.targetNick || '').toLowerCase();
+      const accounts = readAccounts();
+      const senderEntry = findAccountEntry(accounts, socket.nick);
+      const targetEntry = findAccountEntry(accounts, message.targetNick);
+      if (!senderEntry || !targetEntry) { sendSocialError(socket, 'trade', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (!areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'trade', 'MOŻESZ WYMIENIAĆ SIĘ TYLKO ZE ZNAJOMYM'); return; }
+      const targetNick = targetEntry[0];
       const target = activeSocketsByNick.get(targetNick);
-      if (!socket.nick || !target || target === socket) return;
+      if (!target || target === socket) { sendSocialError(socket, 'trade', 'ZNAJOMY JEST NIEDOSTĘPNY'); return; }
       const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|');
       const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() };
       if (!session.offers) session.offers = new Map();
@@ -493,7 +677,29 @@ webSocketServer.on('connection', socket => {
       send(target, { type: 'trade-offer', fromNick: socket.nick, offer, changed });
       return;
     }
-    if (message.type === 'trade-commit') { const targetNick = String(message.targetNick || '').toLowerCase(); const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|'); const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() }; const offer = safeTradeOffer(message.offer); session.offers.set(socket.nick.toLowerCase(), offer); session.members.set(socket.nick.toLowerCase(), { socket, offer }); tradeSessions.set(tradeKey, session); if (session.members.size === 2) { const [first, second] = [...session.members.values()]; send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick }); send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick }); tradeSessions.delete(tradeKey); } return; }
+    if (message.type === 'trade-commit') {
+      const accounts = readAccounts();
+      const senderEntry = findAccountEntry(accounts, socket.nick);
+      const targetEntry = findAccountEntry(accounts, message.targetNick);
+      if (!senderEntry || !targetEntry) { sendSocialError(socket, 'trade', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      if (!areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'trade', 'MOŻESZ WYMIENIAĆ SIĘ TYLKO ZE ZNAJOMYM'); return; }
+      const targetNick = targetEntry[0];
+      const target = activeSocketsByNick.get(targetNick);
+      if (!target || target === socket) { sendSocialError(socket, 'trade', 'ZNAJOMY JEST NIEDOSTĘPNY'); return; }
+      const tradeKey = [socket.nick.toLowerCase(), targetNick].sort().join('|');
+      const session = tradeSessions.get(tradeKey) || { members: new Map(), offers: new Map() };
+      const offer = safeTradeOffer(message.offer);
+      session.offers.set(socket.nick.toLowerCase(), offer);
+      session.members.set(socket.nick.toLowerCase(), { socket, offer });
+      tradeSessions.set(tradeKey, session);
+      if (session.members.size === 2) {
+        const [first, second] = [...session.members.values()];
+        send(first.socket, { type: 'trade-complete', ownOffer: first.offer, receivedOffer: second.offer, partnerNick: second.socket.nick });
+        send(second.socket, { type: 'trade-complete', ownOffer: second.offer, receivedOffer: first.offer, partnerNick: first.socket.nick });
+        tradeSessions.delete(tradeKey);
+      }
+      return;
+    }
     if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1'), message.ranked === true); return; }
     if (message.type === 'queue-cancel') { if (socket.rankedQueueActive) { socket.rankedFallbackOpen = true; socket.rankedQueueActive = false; } removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
     if (message.type === 'bot-match-start') {
@@ -536,13 +742,12 @@ webSocketServer.on('connection', socket => {
     }
     if (message.type === 'join') {
       const code = String(message.code || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-      if (!code || socket.room) return;
+      if (!code || socket.room || !socket.nick) return;
       const room = rooms.get(code) || new Set();
       if (room.size >= 2) { send(socket, { type: 'room-full' }); return; }
       room.add(socket);
       rooms.set(code, room);
       socket.room = code;
-      socket.nick = String(message.nick || socket.nick || 'GRACZ');
       socket.profile = safeProfile(message.profile || socket.profile);
       send(socket, { type: 'waiting', code });
       if (room.size === 2) { const players = [...room]; players.forEach((player, index) => { player.teamId = `${code}:${index}`; }); const participants = players.map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); players.forEach((player, index) => { const opponent = { nick: players[1 - index].nick, ...players[1 - index].profile }; send(player, { type: 'matched', teamId: player.teamId, team: [player.nick], opponents: [opponent], opponent, players: participants }); }); }
