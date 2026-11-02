@@ -14,3 +14,5 @@ services:
         value: production
       - key: DATA_DIR
         value: /var/data
+      - key: GAME_OVERLORD_PASSWORD
+        sync: false
