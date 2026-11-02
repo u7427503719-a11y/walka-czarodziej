@@ -347,7 +347,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(account?.role)); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (['owner', 'admin'].includes(account?.role)) toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', account?.role !== 'owner'); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (account?.role === 'owner') toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -477,10 +477,10 @@ function syncAccountRoleUi() {
   window.userRoles = window.userRoles || {};
   if (currentUser) window.userRoles[currentUser] = role;
   document.getElementById('reportBtn')?.classList.toggle('hidden', !currentUser);
-  const adminButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'ADMIN PANEL');
-  adminButton?.classList.toggle('hidden', !currentUser || !['owner', 'admin'].includes(role));
-  const halfAdminButton = Array.from(document.querySelectorAll('button')).find(button => button.textContent.trim() === 'PÓŁ-ADMIN PANEL');
-  halfAdminButton?.classList.toggle('hidden', !currentUser || role !== 'half-admin');
+  document.getElementById('staffAdminPanel')?.classList.toggle('hidden', !currentUser || !['owner', 'admin'].includes(role));
+  document.getElementById('staffHalfAdminPanel')?.classList.toggle('hidden', !currentUser || role !== 'half-admin');
+  document.getElementById('adminRoleControls')?.classList.toggle('hidden', role !== 'owner');
+  window.refreshAdminReports?.();
 }
 async function ownerRequest(action, data) { const response = await fetch(`/api/owner/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'BŁĄD SERWERA'); return result; }
 async function checkServerAccount(nick) { if (!currentUser || !sessionPassword) throw new Error('ZALOGUJ SIĘ PONOWNIE'); const result = await authRequest('check-account', { nick: currentUser, password: sessionPassword, targetNick: String(nick || '').trim() }, true); return result.account; }
@@ -2540,6 +2540,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
         time: new Date().toLocaleString("pl-PL")
       });
       localStorage.setItem('arcanaReports', JSON.stringify(reports));
+      window.refreshAdminReports?.();
     } catch (error) {
       setToast(error.message);
       throw error;
@@ -2550,65 +2551,11 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   // PANEL ADMINA / WŁAŚCICIELA
   // ============================================================
 
-  const adminPanel = document.createElement('div');
-  adminPanel.className = "friends-modal hidden";
-  adminPanel.innerHTML = `
-    <div class="friends-window" style="max-width:480px;">
-      <h3>Panel Administracji</h3>
-
-      <h4>Zgłoszenia graczy:</h4>
-      <div id="adminReports" class="friends-list"></div>
-
-      <h4>Nadawanie ról (tylko właściciel):</h4>
-      <input id="roleNick" placeholder="Nick gracza">
-      <button id="giveAdmin">Nadaj Admina</button>
-      <button id="giveHalfAdmin">Nadaj Pół-Admina</button>
-      <button id="removeRole">Usuń Rolę</button>
-
-      <h4>Zawieszenie gracza:</h4>
-      <input id="suspendNick" placeholder="Nick gracza">
-      <button id="suspendBtn">Zawieś (1 dzień)</button>
-      <button id="unsuspendBtn">Odwieszenie</button>
-
-      <button id="adminClose" style="margin-top:12px;">Zamknij</button>
-    </div>
-  `;
-  document.body.appendChild(adminPanel);
-
-  // ============================================================
-  // PRZYCISK ADMIN PANELU
-  // ============================================================
-
-  const adminBtn = document.createElement('button');
-  adminBtn.textContent = "ADMIN PANEL";
-  adminBtn.style.position = "fixed";
-  adminBtn.style.right = "10px";
-  adminBtn.style.top = "10px";
-  adminBtn.style.zIndex = "9999";
-  adminBtn.style.padding = "8px 14px";
-  adminBtn.style.background = "#1565c0";
-  adminBtn.style.color = "#fff";
-  adminBtn.style.borderRadius = "6px";
-  adminBtn.style.border = "none";
-  adminBtn.style.cursor = "pointer";
-
-  document.body.appendChild(adminBtn);
-  adminBtn.classList.add('hidden');
-
-  adminBtn.onclick = () => {
-    const role = userRoles[currentUser];
-
-    if (
-      currentUser !== OWNER &&
-      role !== "admin"
-    ) return;
-
-    loadAdminReports();
-    adminPanel.classList.remove("hidden");
+  const adminPanel = document.getElementById('staffAdminPanel');
+  adminPanel.querySelector("#adminClose").onclick = () => {
+    const collapsed = adminPanel.classList.toggle('collapsed');
+    adminPanel.querySelector("#adminClose").textContent = collapsed ? 'ROZWIŃ' : 'ZWIŃ';
   };
-
-  adminPanel.querySelector("#adminClose").onclick = () =>
-    adminPanel.classList.add("hidden");
 
   // ============================================================
   // ŁADOWANIE ZGŁOSZEŃ (owner + admin)
@@ -2635,6 +2582,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       list.appendChild(row);
     });
   }
+  window.refreshAdminReports = loadAdminReports;
 
   // ============================================================
   // NADAWANIE RÓL (tylko właściciel)
@@ -2714,6 +2662,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
       const account = await checkServerAccount(target);
       reports.push({ from: currentUser, target: account.nick, text, time: new Date().toLocaleString("pl-PL") });
       localStorage.setItem('arcanaReports', JSON.stringify(reports));
+      window.refreshAdminReports?.();
       sendNetwork({ type: "report", from: currentUser, target: account.nick, text });
     } catch (error) {
       setToast(error.message);
@@ -2724,54 +2673,10 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   // PANEL PÓŁ-ADMINA
   // ============================================================
 
-  const halfPanel = document.createElement('div');
-  halfPanel.className = "friends-modal hidden";
-  halfPanel.innerHTML = `
-    <div class="friends-window" style="max-width:420px;">
-      <h3>Panel Pół-Admina</h3>
-
-      <h4>Zawieś gracza (1 dzień):</h4>
-      <input id="halfSuspendNick" placeholder="Nick gracza">
-      <button id="halfSuspendBtn">Zawieś</button>
-
-      <h4>Wyślij zgłoszenie:</h4>
-      <input id="halfReportNick" placeholder="Nick gracza">
-      <textarea id="halfReportText" rows="3" placeholder="Co się stało?"></textarea>
-      <button id="halfReportBtn">Wyślij zgłoszenie</button>
-
-      <button id="halfClose" style="margin-top:12px;">Zamknij</button>
-    </div>
-  `;
-  document.body.appendChild(halfPanel);
-
-  halfPanel.querySelector("#halfClose").onclick = () =>
-    halfPanel.classList.add("hidden");
-
-  // ============================================================
-  // PRZYCISK PANELU PÓŁ-ADMINA
-  // ============================================================
-
-  const halfBtn = document.createElement('button');
-  halfBtn.textContent = "PÓŁ-ADMIN PANEL";
-  halfBtn.style.position = "fixed";
-  halfBtn.style.right = "10px";
-  halfBtn.style.top = "60px";
-  halfBtn.style.zIndex = "9999";
-  halfBtn.style.padding = "8px 14px";
-  halfBtn.style.background = "#8e24aa";
-  halfBtn.style.color = "#fff";
-  halfBtn.style.borderRadius = "6px";
-  halfBtn.style.border = "none";
-  halfBtn.style.cursor = "pointer";
-
-  document.body.appendChild(halfBtn);
-  halfBtn.classList.add('hidden');
-
-  halfBtn.onclick = () => {
-    const role = userRoles[currentUser];
-    if (role !== "half-admin") return;
-
-    halfPanel.classList.remove("hidden");
+  const halfPanel = document.getElementById('staffHalfAdminPanel');
+  halfPanel.querySelector("#halfClose").onclick = () => {
+    const collapsed = halfPanel.classList.toggle('collapsed');
+    halfPanel.querySelector("#halfClose").textContent = collapsed ? 'ROZWIŃ' : 'ZWIŃ';
   };
 
   // ============================================================
