@@ -20,6 +20,13 @@ const contentTypes = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascr
 const dataDirectory = process.env.DATA_DIR || path.join(os.homedir(), '.walka-czarodziejow');
 const accountFile = path.join(dataDirectory, 'accounts.json');
 const careerFile = path.join(dataDirectory, 'career.json');
+const progressMapNames = [
+  'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
+  'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
+  'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
+  'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
+  'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
+];
 const ownerNick = 'adam';
 const previousOwnerNicks = ['adam1', 'adam1właściciel', 'adam2właściciel'];
 
@@ -168,6 +175,22 @@ function publicAccount(account) {
   return { nick: account.nick, role: account.role || 'user', wizards: Array.isArray(account.wizards) ? account.wizards : [] };
 }
 
+function sanitizeAccountProgress(progress) {
+  if (!progress || typeof progress !== 'object' || Array.isArray(progress) ||
+      !progress.maps || typeof progress.maps !== 'object' || Array.isArray(progress.maps)) return null;
+  const serialized = JSON.stringify(progress);
+  if (Buffer.byteLength(serialized, 'utf8') > 512 * 1024) return null;
+  const maps = {};
+  for (const name of progressMapNames) {
+    const map = progress.maps[name];
+    if (map === undefined) continue;
+    if (!map || typeof map !== 'object' || Array.isArray(map)) return null;
+    maps[name] = map;
+  }
+  const coins = Number(progress.account?.coins);
+  return { account: { coins: Number.isFinite(coins) ? Math.max(0, coins) : 0 }, maps };
+}
+
 function verifyOwnerCredentials(nick, password, accounts) {
   if (String(nick || '').trim().toLowerCase() !== ownerNick) return false;
   const account = accounts[ownerNick];
@@ -189,7 +212,8 @@ async function handleAuthRequest(request, response) {
   for await (const chunk of request) body += chunk;
   let input;
   try { input = JSON.parse(body); } catch { sendJson(response, 400, { error: 'NIEPRAWIDŁOWE DANE' }); return true; }
-  const action = request.url.split('?')[0].slice('/api/auth/'.length);
+  const pathname = new URL(request.url, `http://${request.headers.host || 'localhost'}`).pathname.replace(/\/+$/, '');
+  const action = pathname.slice('/api/auth/'.length);
   const nick = normalizeNick(input.nick);
   const key = nick.toLowerCase();
   const password = String(input.password || '');
@@ -219,7 +243,30 @@ async function handleAuthRequest(request, response) {
       if (activeSocketsByNick.get(sessionKey)?.readyState === WebSocket.OPEN) { sendJson(response, 409, { error: 'KTOŚ MA JUŻ TAKI NICK' }); return true; }
     }
     writeAccounts(accounts);
-    sendJson(response, action === 'register' ? 201 : 200, { account: publicAccount(account) });
+    sendJson(response, action === 'register' ? 201 : 200, {
+      account: publicAccount(account),
+      progress: action === 'login' ? account.progress || null : null
+    });
+    return true;
+  }
+
+  if (action === 'sync-progress') {
+    const accountEntry = findAccountEntry(accounts, nick);
+    const account = accountEntry?.[1];
+    if (!account) { sendJson(response, 404, { error: 'KONTO O PODANYM NICKU NIE ISTNIEJE NA SERWERZE' }); return true; }
+    if (password.length < 4 || password.length > 128 || !account.salt || !account.hash) {
+      sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true;
+    }
+    const actual = Buffer.from(hashPassword(password, account.salt).hash, 'hex');
+    const expected = Buffer.from(account.hash, 'hex');
+    if (actual.length !== expected.length || !crypto.timingSafeEqual(actual, expected)) {
+      sendJson(response, 401, { error: 'NIEPRAWIDŁOWY NICK LUB HASŁO' }); return true;
+    }
+    const progress = sanitizeAccountProgress(input.progress);
+    if (!progress) { sendJson(response, 400, { error: 'NIEPRAWIDŁOWE LUB ZBYT DUŻE DANE POSTĘPÓW' }); return true; }
+    account.progress = progress;
+    writeAccounts(accounts);
+    sendJson(response, 200, { account: publicAccount(account), progress });
     return true;
   }
 
