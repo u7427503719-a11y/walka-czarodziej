@@ -38,9 +38,8 @@ careerUi.leagueList.innerHTML = rankedLeagueOrder.map(league => `<div class="ran
 let careerProgress = { month: '', wins: 0, boxes: 0, opening: false, rank: 'DREWNO 1', rankPoints: 0 };
 const chatUi = { button: document.getElementById('chatButton'), modal: document.getElementById('chatModal'), close: document.getElementById('chatClose'), form: document.getElementById('chatForm'), input: document.getElementById('chatInput'), bubble: document.getElementById('chatBubble') };
 const tradeUi = { requestModal: document.getElementById('tradeRequestModal'), requestText: document.getElementById('tradeRequestText'), accept: document.getElementById('tradeAccept'), reject: document.getElementById('tradeReject'), modal: document.getElementById('tradeModal'), close: document.getElementById('tradeClose'), cancel: document.getElementById('tradeCancel'), confirm: document.getElementById('tradeConfirm'), partnerName: document.getElementById('tradePartnerName'), ownItems: document.getElementById('tradeOwnItems'), partnerItems: document.getElementById('tradePartnerItems'), ownCoins: document.getElementById('tradeOwnCoins'), partnerCoins: document.getElementById('tradePartnerCoins'), status: document.getElementById('tradeStatus') };
-const OWNER_NICK = 'adam';
-const PREVIOUS_OWNER_NICKS = ['adam1', 'adam1właściciel', 'adam2właściciel'];
-const OWNER_PASSWORD = 'admin123';
+const OWNER_NICK = 'szymon';
+const RESTRICTED_OWNER_NICK = 'szymon';
 const OWNER_NICKS = [OWNER_NICK];
 let currentUser = '';
 let sessionPassword = '';
@@ -140,32 +139,10 @@ function flushProgressSync() {
   }).catch(error => console.error('Nie udało się wysłać postępów na serwer:', error));
 }
 function ensureOwnerAccount() {
-  let accounts = getAccounts();
+  const accounts = getAccounts();
   const key = OWNER_NICK.toLowerCase();
-  const legacyOwnerKeys = [...new Set([OWNER_NICK, ...PREVIOUS_OWNER_NICKS].map(nick => nick.toLowerCase()))];
-  const previousOwnerNick = legacyOwnerKeys.find(nick => nick !== key && accounts[nick]);
-  if (previousOwnerNick) {
-    moveAccountData(previousOwnerNick, OWNER_NICK);
-    accounts = getAccounts();
-  }
-  legacyOwnerKeys.forEach(nick => {
-    const previousOwner = accounts[nick];
-    if (previousOwner && previousOwner.role === 'owner') previousOwner.role = 'user';
-    if (nick !== key) delete accounts[nick];
-  });
-  const bans = getMap('arcanaBans');
-  delete bans[key];
-  saveMap('arcanaBans', bans);
-
-  if (!accounts[key]) {
-    accounts[key] = { nick: OWNER_NICK, password: OWNER_PASSWORD, role: 'owner' };
-  } else {
-    accounts[key].nick = OWNER_NICK;
-    accounts[key].role = 'owner';
-    if (!accounts[key].serverSynced && (!accounts[key].password || accounts[key].password === accounts[key].nick)) {
-      accounts[key].password = OWNER_PASSWORD;
-    }
-  }
+  if (!accounts[key]) accounts[key] = { nick: OWNER_NICK, role: 'owner' };
+  else accounts[key].role = 'owner';
 
   Object.keys(accounts).forEach(accountKey => {
     const account = accounts[accountKey];
@@ -347,7 +324,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', account?.role !== 'owner'); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); if (account?.role === 'owner') toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', account?.role !== 'owner'); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); updateRestrictedOwnerTools(); if (account?.role === 'owner') toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -470,6 +447,20 @@ async function loginAccount(event) { event.preventDefault(); const nick = auth.l
 function ownerTarget() { const key = ownerUi.target.value.trim().toLowerCase(); return key; }
 function ownerResult(text) { ownerUi.message.textContent = text; }
 function isOwner() { return OWNER_NICKS.includes(currentUser.toLowerCase()); }
+function hasRestrictedOwnerTools() { return currentUser.toLowerCase() === RESTRICTED_OWNER_NICK; }
+function updateRestrictedOwnerTools() {
+  const restricted = hasRestrictedOwnerTools();
+  const canUseSpecialTools = !restricted && isOwner();
+  ownerUi.grantOctober.closest('.owner-row')?.classList.toggle('hidden', !canUseSpecialTools);
+  ownerUi.resetRanking.closest('.owner-row')?.classList.toggle('hidden', !canUseSpecialTools);
+  const overlordOption = ownerUi.wizard.querySelector('option[value="overlord"]');
+  if (overlordOption) {
+    overlordOption.hidden = restricted;
+    overlordOption.disabled = restricted;
+  }
+  if (restricted && ownerUi.wizard.value === 'overlord') ownerUi.wizard.value = 'storm';
+}
+function canUseRestrictedOwnerTools() { return isOwner() && !hasRestrictedOwnerTools(); }
 function isStaff() { const account = getAccounts()[currentUser.toLowerCase()]; return account?.role === 'owner' || account?.role === 'admin'; }
 function syncAccountRoleUi() {
   const accountRole = currentUser ? getAccounts()[currentUser.toLowerCase()]?.role || 'user' : '';
@@ -485,18 +476,18 @@ function syncAccountRoleUi() {
 async function ownerRequest(action, data) { const response = await fetch(`/api/owner/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) }); const result = await response.json(); if (!response.ok) throw new Error(result.error || 'BŁĄD SERWERA'); return result; }
 async function checkServerAccount(nick) { if (!currentUser || !sessionPassword) throw new Error('ZALOGUJ SIĘ PONOWNIE'); const result = await authRequest('check-account', { nick: currentUser, password: sessionPassword, targetNick: String(nick || '').trim() }, true); return result.account; }
 async function cacheCheckedAccount(nick) { const account = await checkServerAccount(nick); const key = account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); return { account, key, accounts }; }
-async function verifyOwnerPassword() { ownerPasswordVerified = false; verifiedOwnerPassword = ''; ownerUi.grantOctober.classList.add('hidden'); if (!isOwner() || !ownerUi.password.value) { ownerResult('WPISZ HASŁO WŁAŚCICIELA'); return; } try { await ownerRequest('verify-password', { ownerNick: currentUser, password: ownerUi.password.value }); verifiedOwnerPassword = ownerUi.password.value; ownerPasswordVerified = true; ownerUi.grantOctober.classList.remove('hidden'); ownerResult('HASŁO POTWIERDZONE // PODAJ NICK GRACZA'); } catch (error) { ownerResult(error.message); } }
+async function verifyOwnerPassword() { ownerPasswordVerified = false; verifiedOwnerPassword = ''; ownerUi.grantOctober.classList.add('hidden'); if (!isOwner() || !ownerUi.password.value) { ownerResult('WPISZ HASŁO WŁAŚCICIELA'); return; } try { await ownerRequest('verify-password', { ownerNick: currentUser, password: ownerUi.password.value }); verifiedOwnerPassword = ownerUi.password.value; ownerPasswordVerified = true; updateRestrictedOwnerTools(); ownerResult('HASŁO POTWIERDZONE // PODAJ NICK GRACZA'); } catch (error) { ownerResult(error.message); } }
 async function setAccountRole(nick, role) { if (!isOwner()) return; if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; } try { const result = await ownerRequest('set-role', { ownerNick: currentUser, password: verifiedOwnerPassword, targetNick: nick, role }); const key = result.account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...result.account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); window.userRoles = window.userRoles || {}; window.userRoles[result.account.nick] = result.account.role; syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', !['owner', 'admin'].includes(getAccounts()[currentUser.toLowerCase()]?.role)); ownerResult(result.account.role === 'user' ? `USUNIĘTO ROLĘ: ${result.account.nick}` : `NADANO ROLĘ ${result.account.role}: ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
-async function grantOctoberWizard() { if (!isOwner() || !ownerPasswordVerified || !ownerTarget()) return; try { const result = await ownerRequest('grant-wizard', { ownerNick: currentUser, password: verifiedOwnerPassword, targetNick: ownerUi.target.value.trim() }); const key = result.account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...result.account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || []), 'october'])); saveMap('arcanaOwned', owned); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`PAŹDZIERNIK NADANY GRACZOWI ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
-async function resetRankedLadder() { if (!isOwner()) return; if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; } if (!confirm('Czy na pewno zresetować rangi wszystkich graczy? Misje dzienne i ranking miesiąca pozostaną bez zmian.')) return; try { const result = await ownerRequest('reset-ranking', { ownerNick: currentUser, password: verifiedOwnerPassword }); ownerResult(`ZRESETOWANO RANGI ${result.resetPlayers} GRACZY`); refreshCareer(); } catch (error) { ownerResult(error.message); } }
+async function grantOctoberWizard() { if (!canUseRestrictedOwnerTools()) { ownerResult('TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA'); return; } if (!ownerPasswordVerified || !ownerTarget()) return; try { const result = await ownerRequest('grant-wizard', { ownerNick: currentUser, password: verifiedOwnerPassword, targetNick: ownerUi.target.value.trim() }); const key = result.account.nick.toLowerCase(); const accounts = getAccounts(); accounts[key] = { ...(accounts[key] || {}), ...result.account, serverSynced: true }; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || []), 'october'])); saveMap('arcanaOwned', owned); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`PAŹDZIERNIK NADANY GRACZOWI ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
+async function resetRankedLadder() { if (!canUseRestrictedOwnerTools()) { ownerResult('TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA'); return; } if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; } if (!confirm('Czy na pewno zresetować rangi wszystkich graczy? Misje dzienne i ranking miesiąca pozostaną bez zmian.')) return; try { const result = await ownerRequest('reset-ranking', { ownerNick: currentUser, password: verifiedOwnerPassword }); ownerResult(`ZRESETOWANO RANGI ${result.resetPlayers} GRACZY`); refreshCareer(); } catch (error) { ownerResult(error.message); } }
 function addAdmin() { if (!isOwner()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } setAccountRole(nick, 'admin'); }
-async function changeBan(banned) { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } try { const { account, key } = await cacheCheckedAccount(nick); if (banned && OWNER_NICKS.includes(key)) { ownerResult('NIE MOŻNA ZABANOWAĆ WŁAŚCICIELA'); return; } const bans = getMap('arcanaBans'); if (banned) bans[key] = true; else delete bans[key]; saveMap('arcanaBans', bans); ownerResult(banned ? `GRACZ ZABANOWANY: ${account.nick}` : `GRACZ ODBANOWANY: ${account.nick}`); } catch (error) { ownerResult(error.message); } }
+async function changeBan(banned) { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } try { const { account, key } = await cacheCheckedAccount(nick); const bans = getMap('arcanaBans'); if (banned) bans[key] = true; else delete bans[key]; saveMap('arcanaBans', bans); ownerResult(banned ? `GRACZ ZABANOWANY: ${account.nick}` : `GRACZ ODBANOWANY: ${account.nick}`); } catch (error) { ownerResult(error.message); } }
 async function giveCoins() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const amount = Number(ownerUi.coins.value); if (!Number.isFinite(amount) || amount < 1) { ownerResult('PODAJ PRAWIDŁOWĄ LICZBĘ MONET'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const added = Math.floor(amount); const balances = getMap('arcanaBalances'); balances[key] = Number(balances[key] || account.coins || 0) + added; accounts[key].coins = balances[key]; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = balances[key]; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`DODANO ${added} MONET GRACZOWI ${account.nick}`); } catch (error) { ownerResult(error.message); } }
 async function takeCoins() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const amount = Number(ownerUi.coins.value); if (!Number.isFinite(amount) || amount < 1) { ownerResult('PODAJ PRAWIDŁOWĄ LICZBĘ MONET'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const balances = getMap('arcanaBalances'); const remaining = Math.max(0, Number(balances[key] ?? account.coins ?? 0) - Math.floor(amount)); balances[key] = remaining; accounts[key].coins = remaining; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = remaining; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`ODJĘTO MONETY GRACZOWI ${account.nick} // STAN ${remaining}`); } catch (error) { ownerResult(error.message); } }
 function resetAccount() { if (!isOwner()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || OWNER_NICKS.includes(key)) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } const balances = getMap('arcanaBalances'); const owned = getMap('arcanaOwned'); const selected = getMap('arcanaSelectedWizards'); balances[key] = 0; owned[key] = []; selected[key] = 'apprentice'; accounts[key].coins = 0; accounts[key].wizards = []; const emptyValues = { arcanaKeychains: [], arcanaEquipped: [], arcanaKeychainLevels: {}, arcanaDropEnabled: false, arcanaDropCharm: '' }; Object.entries(emptyValues).forEach(([mapName, emptyValue]) => { const data = getMap(mapName); data[key] = emptyValue; saveMap(mapName, data); }); saveMap('arcanaBalances', balances); saveMap('arcanaOwned', owned); saveMap('arcanaSelectedWizards', selected); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = 0; selectedWizard = 'apprentice'; localStorage.setItem('arcanaCoins', '0'); localStorage.setItem('arcanaWizard', selectedWizard); updateShop(); updateBackpack(); updateProfile(); } ownerResult(`ZEROWANO KONTO ${accounts[key].nick} // ZOSTAŁA PODSTAWOWA POSTAĆ`); }
 const originalResetAccount = resetAccount;
 resetAccount = async function () { if (!isOwner()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } try { const { key } = await cacheCheckedAccount(nick); if (OWNER_NICKS.includes(key)) { ownerResult('NIE MOŻNA ZEROWAĆ KONTA WŁAŚCICIELA'); return; } originalResetAccount(); clearNewProgress(key); } catch (error) { ownerResult(error.message); } };
-async function giveWizard() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const id = ownerUi.wizard.value; if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } if (id === 'overlord' && !isOwner()) { ownerResult('TYLKO WŁAŚCICIEL MOŻE NADAĆ WŁADCĘ'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || account.wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${account.nick}`); } catch (error) { ownerResult(error.message); } }
+async function giveWizard() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const id = ownerUi.wizard.value; if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } if (id === 'overlord' && (!isOwner() || hasRestrictedOwnerTools())) { ownerResult('NADAWANIE WŁADCY JEST NIEDOSTĘPNE'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || account.wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${account.nick}`); } catch (error) { ownerResult(error.message); } }
 const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
 const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, electric: { name: 'ELEKTRYCZNY', cost: 25000, hp: 105, damage: 15, cooldown: .25, abilityType: 'lightning', abilityDamage: .55, abilityCooldown: 8, electricDamage: true }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONISTA', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10, secondaryAbilityType: 'teleport', secondaryAbilityCooldown: 12 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 }, eaglelord: { name: 'WŁADCA ORŁÓW', cost: 250000, hp: 145, damage: 18, cooldown: .28, speed: 1.3, abilityType: 'eagle-strike', abilityDamage: .3, abilityCooldown: 9, secondaryAbilityType: 'eagle-heal', secondaryAbilityCooldown: 12 },
  october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', electric: 'Władca Błyskawic', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', eaglelord: 'Władca Orlich Szczytów', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
@@ -562,11 +553,11 @@ function startWizardTest(id) { if (!wizards[id]) return; previewPreviousWizard =
 function exitWizardTest() { if (mode !== 'preview') return; gameStartToken += 1; running = false; document.getElementById('previewExitButton').classList.add('hidden'); selectedWizard = previewPreviousWizard || 'apprentice'; previewPreviousWizard = ''; ui.result.classList.add('hidden'); ui.start.classList.remove('hidden'); ui.shop.classList.remove('hidden'); updateShop(); openWizard(viewedWizard); updateDeviceControls(); }
 document.getElementById('testWizardButton').addEventListener('click', () => startWizardTest(viewedWizard));
 document.getElementById('previewExitButton').addEventListener('click', exitWizardTest);
-function move(m, dx, dy, dt) { const speed = m === p1 ? (wizards[selectedWizard].speed || 1) : (m.botSpeed || 1); m.x = Math.max(40, Math.min(W - 40, m.x + dx * 230 * speed * dt)); m.y = Math.max(H * .24, Math.min(H * .82, m.y + dy * 180 * speed * dt)); }
+function move(m, dx, dy, dt) { if (m.hp <= 0) return; const speed = m === p1 ? (wizards[selectedWizard].speed || 1) : (m.botSpeed || 1); m.x = Math.max(40, Math.min(W - 40, m.x + dx * 230 * speed * dt)); m.y = Math.max(H * .24, Math.min(H * .82, m.y + dy * 180 * speed * dt)); }
 function getHostileTargets() { return onlineMatch ? [...remotePlayers.values()].filter(player => player.teamId !== teamId) : [p2, ...botPlayers].filter(player => player.teamId === 'bot-team'); }
 function cast(owner, target, color) {
   const melee = owner === p1 && selectedWizard === 'hercules';
-  if (!running || owner === target || owner.cooldown > 0 || owner.stunTimer > 0 || (!melee && owner.mana < 16) || (owner === p1 && p1.damage <= 0 && !melee)) return;
+  if (!running || owner.hp <= 0 || target.hp <= 0 || owner === target || owner.cooldown > 0 || owner.stunTimer > 0 || (!melee && owner.mana < 16) || (owner === p1 && p1.damage <= 0 && !melee)) return;
   const angle = Math.atan2(target.y - owner.y, target.x - owner.x);
   if (melee) {
     if (Math.hypot(target.x - owner.x, target.y - owner.y) > 92) return;
@@ -600,7 +591,7 @@ function cast(owner, target, color) {
   burst(owner.x, owner.y, color, 5);
 }
 function useAbility() {
-  if (!running || p1.stunTimer > 0) return;
+  if (!running || p1.hp <= 0 || p1.stunTimer > 0) return;
   const wizard = wizards[selectedWizard];
   if (wizard.abilityType === 'leaf-gust') {
     if (p1.abilityCooldown > 0) { setToast(`PODMUCH LIŚCI // ODNOWIENIE ${Math.ceil(p1.abilityCooldown)} SEK`); return; }
@@ -699,7 +690,7 @@ function useAbility() {
   }
 }
 function useSecondaryAbility() {
-  if (!running || p1.stunTimer > 0) return;
+  if (!running || p1.hp <= 0 || p1.stunTimer > 0) return;
   const wizard = wizards[selectedWizard];
   if (wizard.secondaryAbilityType === 'eagle-heal') {
     if (p1.secondaryAbilityCooldown > 0) { setToast(`WŁADCA ORŁÓW // LECZENIE ZA ${Math.ceil(p1.secondaryAbilityCooldown)} SEK`); return; }
@@ -748,8 +739,8 @@ function update(dt) {
     clone.x += (targetX - clone.x) * Math.min(1, dt * 5);
     clone.y += (targetY - clone.y) * Math.min(1, dt * 5);
   });
-  if (mode === 'player' && !onlineMatch && p2.stunTimer <= 0) move(p2, (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0), (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0), dt);
-  else if (mode !== 'preview' && !onlineMatch) { if (p2.stunTimer <= 0) { move(p2, p1.x > p2.x + 30 ? 1 : p1.x < p2.x - 30 ? -1 : 0, p1.y > p2.y + 25 ? 1 : p1.y < p2.y - 25 ? -1 : 0, dt); if (!p1.invisible && Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(p2, p1, p2.color); } botPlayers.forEach(player => { if (player.stunTimer > 0) return; const targets = player.teamId === 'bot-team' ? [p1] : getHostileTargets(); const target = targets.filter(item => item && item.hp > 0).sort((left, right) => Math.hypot(left.x - player.x, left.y - player.y) - Math.hypot(left.x - player.x, left.y - player.y))[0]; if (!target) return; move(player, target.x > player.x + 30 ? 1 : target.x < player.x - 30 ? -1 : 0, target.y > player.y + 25 ? 1 : target.y < player.y - 25 ? -1 : 0, dt); if (Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(player, target, player.color); }); }
+  if (mode === 'player' && !onlineMatch && p2.hp > 0 && p2.stunTimer <= 0) move(p2, (keys.ArrowRight ? 1 : 0) - (keys.ArrowLeft ? 1 : 0), (keys.ArrowDown ? 1 : 0) - (keys.ArrowUp ? 1 : 0), dt);
+  else if (mode !== 'preview' && !onlineMatch) { if (p2.hp > 0 && p2.stunTimer <= 0) { move(p2, p1.x > p2.x + 30 ? 1 : p1.x < p2.x - 30 ? -1 : 0, p1.y > p2.y + 25 ? 1 : p1.y < p2.y - 25 ? -1 : 0, dt); if (!p1.invisible && Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(p2, p1, p2.color); } botPlayers.forEach(player => { if (player.hp <= 0 || player.stunTimer > 0) return; const targets = player.teamId === 'bot-team' ? [p1] : getHostileTargets(); const target = targets.filter(item => item && item.hp > 0).sort((left, right) => Math.hypot(left.x - player.x, left.y - player.y) - Math.hypot(left.x - player.x, left.y - player.y))[0]; if (!target) return; move(player, target.x > player.x + 30 ? 1 : target.x < player.x - 30 ? -1 : 0, target.y > player.y + 25 ? 1 : target.y < player.y - 25 ? -1 : 0, dt); if (Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(player, target, player.color); }); }
   p1.cooldown = Math.max(0, p1.cooldown - dt);
   p1.abilityCooldown = Math.max(0, p1.abilityCooldown - dt);
   p1.secondaryAbilityCooldown = Math.max(0, p1.secondaryAbilityCooldown - dt);
@@ -1134,7 +1125,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
         if (data.verified) {
           window.ownerPasswordVerified = true;
           window.verifiedOwnerPassword = password;
-          ownerUi.grantOctober.classList.remove('hidden');
+          updateRestrictedOwnerTools();
           ownerUi.message.textContent = 'HASŁO POPRAWNE';
         } else {
           ownerUi.message.textContent = 'BŁĘDNE HASŁO';
@@ -1157,7 +1148,12 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
         return;
       }
 
-      const targetNick = ownerUi.targetNick.value.trim();
+      if (!canUseRestrictedOwnerTools()) {
+        ownerUi.message.textContent = 'TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA';
+        return;
+      }
+
+      const targetNick = ownerUi.target.value.trim();
 
       fetch('/api/owner/grant-wizard', {
         method: 'POST',
