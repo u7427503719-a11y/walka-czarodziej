@@ -1,4 +1,4 @@
-//game js
+
 addEventListener('storage', event => { if (!matchRoomKey || event.key !== matchRoomKey || !event.newValue) return; const room = JSON.parse(event.newValue); if (room.started && room.players.length === 2 && !running) { joined = true; mode = 'player'; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; startGame('player'); } });
 const canvas = document.getElementById('gameCanvas');
 let rankingMode = "top20"; // albo "top10"
@@ -203,11 +203,6 @@ const passCharacters = {
   gvip: { name: 'PIORUN', pass: 'GVIP', wizardId: 'thunder' },
   premium: { name: 'WŁADCA ORŁÓW', pass: 'PREMIUM', wizardId: 'eaglelord' }
 };
-function getOwnedPassCharacters() {
-  const key = currentUser.toLowerCase();
-  const account = getAccounts()[key];
-  return Array.from(new Set([...(getMap('arcanaOwned')[key] || []), ...(account?.wizards || [])]));
-}
 function grantPassCharacter(passId) {
   const character = passCharacters[passId];
   if (!character || !currentUser) return;
@@ -241,19 +236,6 @@ function migrateOldPassCharacters() {
   delete equippedMap[key];
   saveMap('arcanaEquippedSkin', equippedMap);
 }
-function updatePassCharacterShop() {
-  const owned = getOwnedPassCharacters();
-  const offers = document.getElementById('passCharacterOffers');
-  if (!offers) return;
-  offers.innerHTML = Object.values(passCharacters).filter(character => !ownedOnly || owned.includes(character.wizardId)).map(character => {
-    const wizard = wizards[character.wizardId];
-    const isOwned = owned.includes(character.wizardId);
-    const isSelected = selectedWizard === character.wizardId;
-    return `<article class="pass-character-card ${isSelected ? 'equipped' : ''}"><div class="pass-character-preview"><span></span></div><b>${character.name}</b><small>POSTAĆ Z KARNETU ${character.pass}</small><button type="button" data-character-action="${isOwned ? 'use' : 'buy'}" data-wizard-id="${character.wizardId}">${isSelected ? 'WYBRANA' : isOwned ? 'UŻYJ POSTACI' : `${wizard.cost.toLocaleString('pl-PL')} MONET // KUP`}</button></article>`;
-  }).join('');
-  document.getElementById('passCharacterEmpty')?.classList.toggle('hidden', !ownedOnly || owned.length > 0);
-}
-window.refreshPassCharacterShop = updatePassCharacterShop;
 window.grantPassCharacter = grantPassCharacter;
 function getKeychains() { return getMap('arcanaKeychains')[currentUser.toLowerCase()] || []; }
 function getEquippedKeychains() { return (getMap('arcanaEquipped')[currentUser.toLowerCase()] || []).filter(id => getKeychains().includes(id) && keychains[id]); }
@@ -289,12 +271,14 @@ function applyCareerState(message) {
   updateCareerUI();
 }
 function applyDailyBoxReward(reward) {
-  coins += Number(reward.coins) || 0;
+  const baseCoins = Number(reward.coins) || 0;
+  const earnedCoins = window.applyMoneyMultiplier ? window.applyMoneyMultiplier(baseCoins) : baseCoins;
+  coins += earnedCoins;
   persistCoins();
   if (reward.kind === 'keychain' && keychains[reward.itemId]) grantKeychain(reward.itemId);
   else if (reward.kind === 'hat' && hats[reward.itemId]) { const inventory = getMap('arcanaHats'); inventory[currentUser.toLowerCase()] = [...(inventory[currentUser.toLowerCase()] || []), reward.itemId]; saveMap('arcanaHats', inventory); updateBackpack(); }
   const itemName = reward.kind === 'keychain' ? keychains[reward.itemId]?.name : hats[reward.itemId]?.name;
-  careerUi.chestResult.textContent = `+${Number(reward.coins) || 0} MONET${itemName ? ` // ${itemName} DODANY DO PLECAKA` : ''}`;
+  careerUi.chestResult.textContent = `+${earnedCoins} MONET${itemName ? ` // ${itemName} DODANY DO PLECAKA` : ''}`;
   updateShop();
 }
 
@@ -489,7 +473,7 @@ const originalResetAccount = resetAccount;
 resetAccount = function () { const key = ownerTarget(); const shouldClear = isOwner() && key !== OWNER_NICK.toLowerCase() && Boolean(getAccounts()[key]); originalResetAccount(); if (shouldClear) clearNewProgress(key); };
 function giveWizard() { if (!isStaff()) return; const key = ownerTarget(); const accounts = getAccounts(); const id = ownerUi.wizard.value; if (!accounts[key] || (id === 'overlord' && !isOwner())) { ownerResult('TYLKO WŁAŚCICIEL MOŻE NADAĆ WŁADCĘ'); return; } const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || accounts[key].wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${accounts[key].nick}`); }
 const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
-const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, electric: { name: 'ELEKTRYCZNY', cost: 25000, hp: 105, damage: 15, cooldown: .25, abilityType: 'lightning', abilityDamage: .55, abilityCooldown: 8 }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONISTA', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 }, eaglelord: { name: 'WŁADCA ORŁÓW', cost: 250000, hp: 145, damage: 18, cooldown: .28, speed: 1.3, abilityType: 'blink', abilityDamage: .45, abilityCooldown: 9 },
+const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, electric: { name: 'ELEKTRYCZNY', cost: 25000, hp: 105, damage: 15, cooldown: .25, abilityType: 'lightning', abilityDamage: .55, abilityCooldown: 8, electricDamage: true }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield: true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONISTA', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10, secondaryAbilityType: 'teleport', secondaryAbilityCooldown: 12 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 }, eaglelord: { name: 'WŁADCA ORŁÓW', cost: 250000, hp: 145, damage: 18, cooldown: .28, speed: 1.3, abilityType: 'eagle-strike', abilityDamage: .3, abilityCooldown: 9, secondaryAbilityType: 'eagle-heal', secondaryAbilityCooldown: 12 },
  october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', electric: 'Władca Błyskawic', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', eaglelord: 'Władca Orlich Szczytów', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
 const botProfiles = [
   { wizardId: 'apprentice', difficulty: 1, reward: 100 },
@@ -510,12 +494,12 @@ let matchRoomKey = '';
 let matchSocket = null, onlineMatch = false, lastNetworkSync = 0;
 let groupId = '', groupMembers = [], pendingGroupInvite = null, teamId = '', randomQueued = false, queueMatchType = '1v1';
 let coins = Number(localStorage.getItem('arcanaCoins') || 0), selectedWizard = localStorage.getItem('arcanaWizard') || 'apprentice', viewedWizard = 'apprentice';
-let W = 0, H = 0, running = false, last = 0, score = 0, mode = 'bot', joined = false, toastClock = 0, ownedOnly = false, deviceMode = '', joystickPointer = null, gameStartToken = 0;
+let W = 0, H = 0, running = false, last = 0, score = 0, mode = 'bot', joined = false, toastClock = 0, ownedOnly = false, deviceMode = '', joystickPointer = null, gameStartToken = 0, teleportTargeting = false;
 let previewPreviousWizard = '';
 let activeBotProfile = botProfiles[0], botPlayers = [];
 let joystickX = 0, joystickY = 0;
 const keys = {};
-const p1 = { x: 0, y: 0, hp: 100, maxHp: 100, mana: 100, damage: 12, spellCooldown: .3, abilityCooldown: 0, clones: 0, shield: 0, shieldUsed: false, invisible: false, invisibleTimer: 0, color: '#72e4d0', accent: '#d8fff2', face: 1, cooldown: 0 };
+const p1 = { x: 0, y: 0, hp: 100, maxHp: 100, mana: 100, damage: 12, spellCooldown: .3, abilityCooldown: 0, secondaryAbilityCooldown: 0, clones: 0, shield: 0, shieldUsed: false, invisible: false, invisibleTimer: 0, color: '#72e4d0', accent: '#d8fff2', face: 1, cooldown: 0 };
 const p2 = { x: 0, y: 0, hp: 100, maxHp: 100, mana: 100, damage: 12, damageReduction: 0, clones: [], color: '#ef7693', accent: '#ffe0e9', face: -1, cooldown: 0, teamId: 'bot-team', botSpeed: 1 };
 const remotePlayers = new Map();
 let reportedEliminations = new Set();
@@ -537,6 +521,8 @@ function startRankedQueue() { if (!currentUser || onlineMatch) return; if (rando
 function toggleRandomQueue() { if (!currentUser || onlineMatch) return; if (randomQueued) { randomQueued = false; sendNetwork({ type: 'queue-cancel' }); randomQueueButton.textContent = 'LOSOWA GRA →'; ui.join.textContent = 'ANULOWANO KOLEJKĘ'; return; } if (getMap('arcanaMatchBlocked')[currentUser.toLowerCase()]) { setToast('DOPASOWANIE ZABLOKOWANE'); return; } if (groupId && groupMembers[0]?.toLowerCase() !== currentUser.toLowerCase()) { setToast('LIDER GRUPY URUCHAMIA DOPASOWYWANIE'); return; } randomQueued = true; mode = 'player'; ui.join.textContent = `SZUKANIE MECZU ${queueMatchType.toUpperCase()}...`; connectMatchSocket(() => { if (randomQueued) sendNetwork({ type: 'queue-random', matchType: queueMatchType, profile: getProfileDrop() }); }); randomQueueButton.textContent = 'ANULUJ KOLEJKĘ'; }
 function syncNetworkState() { const now = performance.now(); if (!onlineMatch || now - lastNetworkSync < 50) return; lastNetworkSync = now; sendNetwork({ type: 'state', nick: currentUser, teamId, x: p1.x / W, y: p1.y / H, hp: p1.hp, maxHp: p1.maxHp, mana: p1.mana, invisible: p1.invisible, damageReduction: p1.damageReduction, reflectShield: p1.reflectShield, clones: cloneBodies.map(clone => ({ x: clone.x / W, y: clone.y / H, slot: clone.slot })) }); }
 function startGame(selectedMode) { mode = selectedMode; if (mode === 'player' && !joined) { ui.join.textContent = 'NACISNIJ ENTER, ABY DOLACZYC GRACZEM 2'; return; } if (mode.startsWith('bot')) activeBotProfile = botProfiles[Math.floor(Math.random() * botProfiles.length)]; const startToken = ++gameStartToken; reset(); running = false; ui.result.classList.add('hidden'); ui.start.classList.add('hidden'); const wizard = wizards[selectedWizard]; ui.revealName.textContent = wizard.name; ui.revealMage.textContent = wizard.name.slice(0, 1); ui.revealPower.textContent = wizard.abilityType === 'illusion' ? `NIEWIDZIALNOŚĆ // ${wizard.invisibilityDuration} SEKUND // ODNOWIENIE ${wizard.abilityCooldown} SEKUND` : wizard.abilityType ? `UMIEJĘTNOŚĆ // ${Math.round(wizard.abilityDamage * 100)}% HP // CO ${wizard.abilityCooldown} SEK` : wizard.reflect ? `ODBICIE POCISKÓW // CO ${wizard.abilityCooldown} SEK` : wizard.heal ? `LECZENIE ${wizard.heal} HP // CO ${wizard.abilityCooldown} SEK` : wizard.maxClones ? `MAKSYMALNIE ${wizard.maxClones} KLONÓW` : wizard.shield ? 'TARCZA // REDUKCJA OBRAŻEŃ' : `MOC ZAKLĘCIA // ${wizard.damage} OBRAŻEŃ`; ui.reveal.classList.remove('hidden'); ui.status.textContent = 'PREPARING DUEL'; ui.event.textContent = 'CHOOSE YOUR SPELL'; ui.rival.textContent = mode.startsWith('bot') ? wizards[activeBotProfile.wizardId].name : 'PLAYER 2'; setTimeout(() => { if (startToken !== gameStartToken || !ui.start.classList.contains('hidden')) return; ui.reveal.classList.add('hidden'); running = true; updateDeviceControls(); ui.status.textContent = 'DUEL SYSTEMS ACTIVE'; ui.event.textContent = mode.startsWith('bot') ? 'THE BOT HAS ENTERED THE CIRCLE' : 'TWO MAGES // ONE DESTINY'; }, 1800); }
+const resetWithAbilityState = reset;
+reset = function () { resetWithAbilityState(); p1.secondaryAbilityCooldown = 0; teleportTargeting = false; };
 const originalStartGame = startGame;
 startGame = function (selectedMode) { matchWinRecorded = false; originalStartGame(selectedMode); if (ui.reveal.classList.contains('hidden')) return; const rival = mode.startsWith('bot') ? { nick: 'BOT', wizardId: activeBotProfile.wizardId, title: '' } : opponentProfile; document.getElementById('matchPlayerWizard').textContent = wizards[selectedWizard].name; document.getElementById('matchPlayerNick').textContent = currentUser || 'GRACZ'; document.getElementById('matchPlayerTitle').textContent = getCurrentTitle(); document.getElementById('matchRivalWizard').textContent = wizards[rival.wizardId]?.name || 'ISKRA'; document.getElementById('matchRivalNick').textContent = rival.nick || 'PRZECIWNIK'; document.getElementById('matchRivalTitle').textContent = rival.title || ''; };
 const startGameWithPreviewLabel = startGame;
@@ -544,7 +530,7 @@ startGame = function (selectedMode) { startGameWithPreviewLabel(selectedMode); i
 const originalEndGame = endGame;
 endGame = function (winner) { const wasRunning = running; const wasOnline = onlineMatch; const wasRanked = rankedGameActive; if (wasRunning && mode.startsWith('bot')) sendNetwork({ type: 'bot-match-end' }); originalEndGame(winner); if (wasRunning && winner === 'GRACZ 1') recordWizardWin(); if (wasRunning && wasRanked && !wasOnline) connectMatchSocket(() => sendNetwork({ type: 'ranked-bot-result', won: winner === 'GRACZ 1' })); if (wasRunning && !wasRanked) rankedGameActive = false; };
 function joinPlayer() { if (mode === 'player' && !joined) { joined = true; ui.join.textContent = 'GRACZ 2 DOLACZYL // NACISNIJ ENTER'; setToast('GRACZ 2 DOLACZYL'); } }
-function endGame(winner) { if (!running) return; running = false; const wasOnline = onlineMatch; const playerWon = winner === 'GRACZ 1'; if (wasOnline && playerWon) sendNetwork({ type: 'game-over', winnerNick: currentUser, winnerTeamId: teamId }); if (wasOnline) { onlineMatch = false; joined = false; } const reward = mode.startsWith('bot') ? activeBotProfile.reward : 100; if (playerWon) { coins += reward; persistCoins(); setToast(`+${reward} MONET ZA ZWYCIĘSTWO`); } else { coins = Math.max(0, coins - 50); persistCoins(); setToast('-50 MONET ZA PRZEGRANĄ'); } ui.result.textContent = playerWon ? 'WYGRAŁEŚ!' : 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden'); ui.result.classList.toggle('win', playerWon); ui.start.classList.remove('hidden'); ui.join.textContent = wasOnline ? 'RUNDA ZAKOŃCZONA // WPISZ KOD, ABY DOŁĄCZYĆ PONOWNIE' : `${winner} WYGRYWA // NAGRODA ${playerWon ? reward : 0} MONET`; ui.status.textContent = 'DUEL COMPLETE'; updateDeviceControls(); updateShop(); }
+function endGame(winner) { if (!running) return; running = false; const wasOnline = onlineMatch; const playerWon = winner === 'GRACZ 1'; if (wasOnline && playerWon) sendNetwork({ type: 'game-over', winnerNick: currentUser, winnerTeamId: teamId }); if (wasOnline) { onlineMatch = false; joined = false; } const baseReward = mode.startsWith('bot') ? activeBotProfile.reward : 100; const reward = window.applyMoneyMultiplier ? window.applyMoneyMultiplier(baseReward) : baseReward; if (playerWon) { coins += reward; persistCoins(); setToast(`+${reward} MONET ZA ZWYCIĘSTWO`); } else { coins = Math.max(0, coins - 50); persistCoins(); setToast('-50 MONET ZA PRZEGRANĄ'); } ui.result.textContent = playerWon ? 'WYGRAŁEŚ!' : 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden'); ui.result.classList.toggle('win', playerWon); ui.start.classList.remove('hidden'); ui.join.textContent = wasOnline ? 'RUNDA ZAKOŃCZONA // WPISZ KOD, ABY DOŁĄCZYĆ PONOWNIE' : `${winner} WYGRYWA // NAGRODA ${playerWon ? reward : 0} MONET`; ui.status.textContent = 'DUEL COMPLETE'; updateDeviceControls(); updateShop(); }
 const finishGameWithPreview = endGame;
 endGame = function (winner) { if (mode === 'preview') { if (!running) return; running = false; ui.status.textContent = 'TEST POSTACI ZAKOŃCZONY'; document.getElementById('previewExitButton').textContent = 'WRÓĆ DO POSTACI'; updateDeviceControls(); return; } finishGameWithPreview(winner); };
 function startWizardTest(id) { if (!wizards[id]) return; previewPreviousWizard = selectedWizard; selectedWizard = id; ui.shop.classList.add('hidden'); const exitButton = document.getElementById('previewExitButton'); exitButton.textContent = 'ZAKOŃCZ TEST'; exitButton.classList.remove('hidden'); startGame('preview'); }
@@ -575,7 +561,7 @@ function cast(owner, target, color) {
   owner.mana -= 16;
   const damage = owner === p1 ? p1.damage * getStrengthMultiplier() : owner.damage;
   const healingBolt = owner === p1 && wizards[selectedWizard]?.healAlly;
-  const spell = { id: `${Date.now()}-${Math.random()}`, x: owner.x + Math.cos(angle) * 28, y: owner.y + Math.sin(angle) * 28, vx: Math.cos(angle) * 520, vy: Math.sin(angle) * 520, life: 1.5, damage, color, ownerNick: owner === p1 ? currentUser : owner.nick, teamId: owner === p1 ? teamId : owner.teamId, healAlly: healingBolt, healAmount: wizards[selectedWizard]?.healAmount || 0 };
+  const spell = { id: `${Date.now()}-${Math.random()}`, x: owner.x + Math.cos(angle) * 28, y: owner.y + Math.sin(angle) * 28, vx: Math.cos(angle) * 520, vy: Math.sin(angle) * 520, life: 1.5, damage, color, ownerNick: owner === p1 ? currentUser : owner.nick, teamId: owner === p1 ? teamId : owner.teamId, healAlly: healingBolt, healAmount: wizards[selectedWizard]?.healAmount || 0, electricDamage: owner === p1 && wizards[selectedWizard]?.electricDamage };
   const shieldTarget = target === p1 ? p1.reflectShield > 0 : target.reflectShield > 0;
   if (shieldTarget) {
     const direction = Math.atan2((target === p1 ? p2.y : p1.y) - target.y, (target === p1 ? p2.x : p1.x) - target.x);
@@ -626,7 +612,22 @@ function useAbility() {
     setToast(`ŚWIĄTY LECZYCIEL // +${wizard.healAmount} HP`);
     return;
   }
-  if (wizard.abilityType === 'illusion') { if (p1.abilityCooldown > 0) { setToast(`ILUZJONER // ODNOWIENIE ${Math.ceil(p1.abilityCooldown)} SEK`); return; } p1.invisible = true; p1.invisibleTimer = wizard.invisibilityDuration; p1.abilityCooldown = wizard.abilityCooldown; setToast('ILUZJONER // NIEWIDZIALNOŚĆ PRZEZ 10 SEKUND'); return; }
+  if (wizard.abilityType === 'illusion') {
+    if (p1.invisible) {
+      p1.invisible = false;
+      p1.invisibleTimer = 0;
+      updateDeviceControls();
+      setToast('ILUZJONISTA // ZAKOŃCZONO NIEWIDZIALNOŚĆ');
+      return;
+    }
+    if (p1.abilityCooldown > 0) { setToast(`ILUZJONISTA // ODNOWIENIE ${Math.ceil(p1.abilityCooldown)} SEK`); return; }
+    p1.invisible = true;
+    p1.invisibleTimer = wizard.invisibilityDuration;
+    p1.abilityCooldown = wizard.abilityCooldown;
+    updateDeviceControls();
+    setToast(`ILUZJONISTA // NIEWIDZIALNOŚĆ ${wizard.invisibilityDuration} SEKUND`);
+    return;
+  }
   if (wizard.invisibility) { p1.invisible = !p1.invisible; setToast(p1.invisible ? 'WŁADCA // NIEWIDZIALNOŚĆ' : 'WŁADCA // WIDOCZNOŚĆ'); return; }
   if (wizard.shield && !wizard.reflect) {
     if (p1.shieldUsed) return;
@@ -648,21 +649,68 @@ function useAbility() {
       setToast('HERKULES // KAMIEŃ RZUCONY');
       return;
     }
-    const rawDamage = p2.maxHp * wizard.abilityDamage;
-    const damage = rawDamage * (1 - (p2.damageReduction || 0));
-    const targetWasAlive = p2.hp > 0;
-    p2.hp -= damage;
-    if (p2.nick && remotePlayers.has(p2.nick.toLowerCase())) remotePlayers.get(p2.nick.toLowerCase()).hp = p2.hp;
-    if (onlineMatch && p2.nick) sendNetwork({ type: 'damage', targetNick: p2.nick, amount: damage });
-    if (targetWasAlive && p2.hp <= 0) recordElimination(p2);
-    burst(p2.x, p2.y, wizard.abilityType === 'sword' ? '#e9e4d5' : '#ffe56b', 16);
-    if (p2.hp <= 0 && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
+    const target = getHostileTargets().filter(player => player.hp > 0)
+      .sort((left, right) => Math.hypot(left.x - p1.x, left.y - p1.y) - Math.hypot(right.x - p1.x, right.y - p1.y))[0];
+    if (!target) { p1.abilityCooldown = 0; setToast('BRAK PRZECIWNIKA W ZASIĘGU'); return; }
+    if (wizard.abilityType === 'eagle-strike') {
+      const angle = Math.atan2(target.y - p1.y, target.x - p1.x);
+      const spell = { id: `${Date.now()}-${Math.random()}`, x: p1.x, y: p1.y, vx: Math.cos(angle) * 340, vy: Math.sin(angle) * 340, life: 2, damage: target.maxHp * wizard.abilityDamage, color: '#f5c451', ownerNick: currentUser, teamId, eagle: true };
+      spells.push({ ...spell, owner: p1 });
+      if (onlineMatch) sendNetwork({ type: 'spell', ownerNick: currentUser, teamId, spell: { ...spell, x: spell.x / W, y: spell.y / H, vx: spell.vx / W, vy: spell.vy / H } });
+      burst(p1.x, p1.y, spell.color, 14);
+      setToast('WŁADCA ORŁÓW // ORZEŁ ATAKUJE');
+      return;
+    }
+    const damage = target.maxHp * wizard.abilityDamage * (1 - (target.damageReduction || 0));
+    const targetWasAlive = target.hp > 0;
+    target.hp -= damage;
+    if (target.nick && remotePlayers.has(target.nick.toLowerCase())) remotePlayers.get(target.nick.toLowerCase()).hp = target.hp;
+    if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage });
+    if (targetWasAlive && target.hp <= 0) recordElimination(target);
+    const effectColor = wizard.abilityType === 'sword' ? '#e9e4d5' : '#ffe56b';
+    burst(target.x, target.y, effectColor, 16);
+    if (target.hp <= 0 && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
     setToast(wizard.abilityType === 'sword' ? 'RYCERZ // CIOS MIECZEM' : 'PIORUN // UDERZENIE');
   }
+}
+function useSecondaryAbility() {
+  if (!running || p1.stunTimer > 0) return;
+  const wizard = wizards[selectedWizard];
+  if (wizard.secondaryAbilityType === 'eagle-heal') {
+    if (p1.secondaryAbilityCooldown > 0) { setToast(`WŁADCA ORŁÓW // LECZENIE ZA ${Math.ceil(p1.secondaryAbilityCooldown)} SEK`); return; }
+    if (p1.hp >= p1.maxHp) { setToast('WŁADCA ORŁÓW // HP JEST PEŁNE'); return; }
+    const heal = p1.maxHp * .3;
+    const healed = Math.min(heal, p1.maxHp - p1.hp);
+    p1.hp = Math.min(p1.maxHp, p1.hp + heal);
+    p1.secondaryAbilityCooldown = wizard.secondaryAbilityCooldown;
+    burst(p1.x, p1.y, '#b7f2c9', 18);
+    setToast(`WŁADCA ORŁÓW // ORZEŁ LECZY +${Math.round(healed)} HP`);
+    return;
+  }
+  if (wizard.secondaryAbilityType === 'teleport') {
+    if (p1.secondaryAbilityCooldown > 0) { setToast(`ILUZJONISTA // TELEPORT ZA ${Math.ceil(p1.secondaryAbilityCooldown)} SEK`); return; }
+    teleportTargeting = !teleportTargeting;
+    setToast(teleportTargeting ? 'ILUZJONISTA // KLIKNIJ MIEJSCE TELEPORTACJI' : 'ILUZJONISTA // TELEPORT ANULOWANY');
+    return;
+  }
+  useShield();
 }
 function applyLeafGust(target, sourceX, sourceY) { const dx = target.x - sourceX; const dy = target.y - sourceY; const distance = Math.hypot(dx, dy); if (distance > 380) return false; const direction = distance ? 1 / distance : 1; target.stunTimer = 2; target.knockbackX = dx * direction * 680; target.knockbackY = dy * direction * 420; target.knockbackTimer = .4; return true; }
 function tickControlEffects(target, dt) { target.stunTimer = Math.max(0, (target.stunTimer || 0) - dt); if (target.knockbackTimer > 0) { target.x = Math.max(40, Math.min(W - 40, target.x + target.knockbackX * dt)); target.y = Math.max(H * .24, Math.min(H * .82, target.y + target.knockbackY * dt)); target.knockbackTimer = Math.max(0, target.knockbackTimer - dt); } }
 function useShield() { if (!running || !wizards[selectedWizard].fullShield || p1.shieldUsed) return; p1.shield = 10; p1.shieldUsed = true; setToast('WŁADCA // TARCZA 100% // 10 SEKUND'); }
+function teleportToPointer(event) {
+  if (!teleportTargeting || !running || selectedWizard !== 'illusionist') return;
+  const rect = canvas.getBoundingClientRect();
+  p1.x = Math.max(40, Math.min(W - 40, (event.clientX - rect.left) * W / rect.width));
+  p1.y = Math.max(H * .24, Math.min(H * .82, (event.clientY - rect.top) * H / rect.height));
+  teleportTargeting = false;
+  p1.secondaryAbilityCooldown = wizards.illusionist.secondaryAbilityCooldown;
+  burst(p1.x, p1.y, '#c4a8ff', 18);
+  lastNetworkSync = 0;
+  syncNetworkState();
+  setToast('ILUZJONISTA // TELEPORTACJA');
+}
+canvas.addEventListener('pointerdown', teleportToPointer);
 function update(dt) {
   if (!running || document.getElementById('rotatePrompt').classList.contains('show')) return;
   tickControlEffects(p1, dt); tickControlEffects(p2, dt); botPlayers.forEach(player => tickControlEffects(player, dt));
@@ -679,7 +727,8 @@ function update(dt) {
   else if (mode !== 'preview' && !onlineMatch) { if (p2.stunTimer <= 0) { move(p2, p1.x > p2.x + 30 ? 1 : p1.x < p2.x - 30 ? -1 : 0, p1.y > p2.y + 25 ? 1 : p1.y < p2.y - 25 ? -1 : 0, dt); if (!p1.invisible && Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(p2, p1, p2.color); } botPlayers.forEach(player => { if (player.stunTimer > 0) return; const targets = player.teamId === 'bot-team' ? [p1] : getHostileTargets(); const target = targets.filter(item => item && item.hp > 0).sort((left, right) => Math.hypot(left.x - player.x, left.y - player.y) - Math.hypot(left.x - player.x, left.y - player.y))[0]; if (!target) return; move(player, target.x > player.x + 30 ? 1 : target.x < player.x - 30 ? -1 : 0, target.y > player.y + 25 ? 1 : target.y < player.y - 25 ? -1 : 0, dt); if (Math.random() < dt * (.45 + activeBotProfile.difficulty * .18)) cast(player, target, player.color); }); }
   p1.cooldown = Math.max(0, p1.cooldown - dt);
   p1.abilityCooldown = Math.max(0, p1.abilityCooldown - dt);
-  if (p1.invisibleTimer > 0) { p1.invisibleTimer = Math.max(0, p1.invisibleTimer - dt); if (!p1.invisibleTimer) p1.invisible = false; }
+  p1.secondaryAbilityCooldown = Math.max(0, p1.secondaryAbilityCooldown - dt);
+  if (p1.invisibleTimer > 0) { p1.invisibleTimer = Math.max(0, p1.invisibleTimer - dt); if (!p1.invisibleTimer) { p1.invisible = false; updateDeviceControls(); } }
   p2.cooldown = Math.max(0, p2.cooldown - dt);
   botPlayers.forEach(player => { player.cooldown = Math.max(0, player.cooldown - dt); player.mana = Math.min(100, player.mana + dt * 8); });
   p1.shield = Math.max(0, p1.shield - dt);
@@ -708,9 +757,11 @@ function update(dt) {
       const damage = spell.damage * (1 - (target.damageReduction || 0));
       const targetWasAlive = target.hp > 0;
       target.hp -= damage;
-      if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage });
+      if (spell.electricDamage) target.stunTimer = Math.max(target.stunTimer || 0, 1.2);
+      if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage, stunDuration: spell.electricDamage ? 1.2 : 0 });
       if (targetWasAlive && target.hp <= 0) recordElimination(target);
-      burst(target.x, target.y, spell.color, 12); spell.life = 0;
+      burst(target.x, target.y, spell.color, spell.electricDamage ? 20 : 12); spell.life = 0;
+      if (spell.electricDamage) setToast('ELEKTRYCZNY // PORAŻENIE PRĄDEM');
       if (p2.nick === target.nick) p2.hp = target.hp;
       if (onlineMatch && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
       else if (!onlineMatch && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
@@ -721,6 +772,7 @@ function update(dt) {
     const reduction = getDamageReduction();
     const shieldFactor = p1.shield > 0 ? (wizards[selectedWizard].fullShield ? 0 : .2) : 1;
     p1.hp -= spell.damage * (1 - reduction) * shieldFactor;
+    if (spell.electricDamage) p1.stunTimer = Math.max(p1.stunTimer || 0, 1.2);
     burst(p1.x, p1.y, spell.color, 12); spell.life = 0;
     if (p1.hp <= 0) endGame('GRACZ 2');
   });
@@ -752,7 +804,7 @@ function commitTrade() { if (!tradeState.partner || tradeState.accepted) return;
 function completeTrade(message) { applyTradeOffer(message.ownOffer.items || [], message.ownOffer.coins || 0, false); applyTradeOffer(message.receivedOffer.items || [], message.receivedOffer.coins || 0, true); tradeUi.status.textContent = 'WYMIANA ZAKOŃCZONA'; setToast('WYMIANA ZAKOŃCZONA'); setTimeout(() => tradeUi.modal.classList.add('hidden'), 900); }
 function showChatBubble(nick, text) { chatUi.bubble.textContent = `${nick}: ${text}`; chatUi.bubble.classList.remove('hidden'); const isOwn = nick.toLowerCase() === currentUser.toLowerCase(); chatUi.bubble.style.left = `${(isOwn ? p1.x : p2.x)}px`; chatUi.bubble.style.top = `${(isOwn ? p1.y : p2.y) - 72}px`; clearTimeout(showChatBubble.timer); showChatBubble.timer = setTimeout(() => chatUi.bubble.classList.add('hidden'), 5000); }
 function sendChat(text) { const clean = String(text || '').trim().slice(0, 120); if (!clean) return; if (onlineMatch) sendNetwork({ type: 'chat', text: clean }); else showChatBubble(currentUser, clean); chatUi.input.value = ''; chatUi.modal.classList.add('hidden'); }
-function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); window.refreshShopCollections?.(); window.updatePassShop?.(); window.refreshPassCharacterShop?.(); }
+function updateShop() { const accounts = getAccounts(); const accountOwned = accounts[currentUser.toLowerCase()]?.wizards || []; const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...accountOwned])); ui.coins.textContent = coins; ui.shop.querySelectorAll('.wizard-card[data-wizard]').forEach(card => { const wizard = wizards[card.dataset.wizard]; if (!wizard) return; const selected = card.dataset.wizard === selectedWizard; const hasWizard = wizard.cost === 0 || owned.includes(card.dataset.wizard); const available = hasWizard || (!wizard.ownerOnly && wizard.cost <= coins) || selected; card.classList.toggle('hidden', ownedOnly && !hasWizard); card.classList.toggle('locked', !available); card.classList.toggle('selected', selected); card.querySelector('span').textContent = selected ? 'WYBRANY' : wizard.ownerOnly && !hasWizard ? 'TYLKO WŁAŚCICIEL' : hasWizard ? 'POSIADANY' : wizard.cost === 0 ? 'DARMOWY' : `${wizard.cost} MONET // KUP`; }); window.refreshShopCollections?.(); window.updatePassShop?.(); }
 function updatePrivateWizardCard() { let card = ui.shop.querySelector('.wizard-card[data-wizard="october"]'); if (card) return; card = document.createElement('button'); card.type = 'button'; card.className = 'wizard-card'; card.dataset.wizard = 'october'; const name = document.createElement('b'); name.textContent = wizards.october.name; const label = document.createElement('span'); label.textContent = 'TYLKO WŁAŚCICIEL'; card.append(name, label); card.addEventListener('click', () => openWizard('october')); ui.shop.querySelector('.wizard-offers').append(card); }
 function escapeHtml(value) { return value.replace(/[&<>"']/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character])); }
 function updateFriends() { const key = currentUser.toLowerCase(); const friends = getMap('arcanaFriends')[key] || []; const requests = getMap('arcanaFriendRequests')[key] || []; ui.friendsList.innerHTML = friends.length ? friends.map(nick => `<div class="friend-item"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><button type="button" data-group-invite="${encodeURIComponent(nick)}">ZAPROŚ DO GRUPY</button></div>`).join('') : '<div class="friends-empty">BRAK ZNAJOMYCH</div>'; ui.suggestionsList.innerHTML = requests.length ? requests.map(nick => `<div class="friend-item friend-request"><span class="friend-identity"><span class="friend-avatar" aria-hidden="true">${escapeHtml(nick.slice(0, 1).toUpperCase())}</span><span>${escapeHtml(nick)}</span></span><span class="friend-request-actions"><button type="button" data-accept="${encodeURIComponent(nick)}">✓</button><button type="button" data-reject="${encodeURIComponent(nick)}">X</button></span></div>`).join('') : '<div class="friends-empty">BRAK ZAPROSZEŃ</div>'; }
@@ -760,7 +812,22 @@ const originalUpdateFriends = updateFriends;
 const originalUpdateShop = updateShop;
 updateShop = function () { loadLimitedWizards(); originalUpdateShop(); updatePrivateWizardCard(); };
 const originalOpenWizard = openWizard;
-openWizard = function (id) { originalOpenWizard(id); if (id === 'october') ui.wizardPower.textContent = `Gadżet: PODMUCH LIŚCI // ODRZUT + OGŁUSZENIE 2 SEKUNDY, ODNOWIENIE ${wizards.october.abilityCooldown} SEKUND | ${wizards.october.damage} OBRAŻEŃ | ${wizards.october.hp} HP`; };
+openWizard = function (id) {
+  originalOpenWizard(id);
+  const wizard = wizards[id];
+  const descriptions = {
+    electric: 'Strzały rażą prądem i ogłuszają. Gadżet E: piorun zadaje 55% HP.',
+    thunder: 'Gadżet E: piorun zadaje 50% maksymalnego HP przeciwnika.',
+    illusionist: `Gadżet E: niewidzialność do ${wizard.invisibilityDuration} s (można przerwać). Gadżet Q: kliknij miejsce, aby się teleportować.`,
+    eaglelord: 'Gadżet E: przyzwany orzeł zadaje do 30% maksymalnego HP. Gadżet Q: orzeł leczy do 30% maksymalnego HP.'
+  };
+  if (descriptions[id]) {
+    const details = ui.wizardPower.textContent;
+    const divider = details.indexOf(' | ');
+    ui.wizardPower.textContent = `${descriptions[id]}${divider >= 0 ? details.slice(divider) : ''}`;
+  }
+  if (id === 'october') ui.wizardPower.textContent = `Gadżet: PODMUCH LIŚCI // ODRZUT + OGŁUSZENIE 2 SEKUNDY, ODNOWIENIE ${wizard.abilityCooldown} SEKUND | ${wizard.damage} OBRAŻEŃ | ${wizard.hp} HP`;
+};
 updateFriends = function () { originalUpdateFriends(); ui.friendsList.querySelectorAll('.friend-item').forEach(item => { const nick = item.querySelector('.friend-identity > span:last-child')?.textContent.trim(); if (nick && !item.querySelector('[data-trade]')) { const button = document.createElement('button'); button.type = 'button'; button.dataset.trade = encodeURIComponent(nick); button.textContent = 'WYMIANA'; item.appendChild(button); } }); };
 function setFriendsTab(tab) { const tabs = { friends: [ui.friendsTab, ui.friendsView], suggestions: [ui.suggestionsTab, ui.suggestionsView], requests: [ui.requestsTab, ui.requestsView] }; Object.entries(tabs).forEach(([name, [button, view]]) => { button.classList.toggle('active', name === tab); view.classList.toggle('hidden', name !== tab); }); }
 const originalNetworkMessageHandler = handleNetworkMessageV2;
@@ -785,7 +852,13 @@ function draw() {
   ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
   stars.forEach(star => { ctx.globalAlpha = star.a; ctx.fillStyle = '#f9ddb0'; ctx.fillRect(star.x, star.y, star.r, star.r); });
   ctx.globalAlpha = 1; ctx.save(); ctx.translate(W / 2, H * .62); ctx.strokeStyle = 'rgba(241,195,120,.45)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.ellipse(0, 0, Math.min(W * .37, 450), Math.min(H * .16, 125), 0, 0, Math.PI * 2); ctx.stroke(); ctx.restore();
-  spells.forEach(spell => { ctx.save(); ctx.shadowColor = spell.color; ctx.shadowBlur = 18; ctx.fillStyle = spell.color; ctx.beginPath(); ctx.arc(spell.x, spell.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.restore(); });
+  spells.forEach(spell => {
+    if (spell.eagle) {
+      drawEagleProjectile(spell);
+      return;
+    }
+    ctx.save(); ctx.shadowColor = spell.color; ctx.shadowBlur = 18; ctx.fillStyle = spell.color; ctx.beginPath(); ctx.arc(spell.x, spell.y, 8, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  });
   particles.forEach(particle => { ctx.globalAlpha = Math.max(0, particle.life * 1.8); ctx.fillStyle = particle.color; ctx.fillRect(particle.x, particle.y, particle.size, particle.size); });
   ctx.globalAlpha = 1;
   const playerLabel = currentUser || 'GRACZ 1'; const rivalLabel = mode === 'preview' || mode.startsWith('bot') ? 'BOT' : (opponentProfile.nick || 'GRACZ 2');
@@ -794,8 +867,51 @@ function draw() {
   if (remotePlayers.size) remotePlayers.forEach(player => { player.clones.forEach(clone => drawMage({ ...player, x: clone.x, y: clone.y }, `${player.nick} // KLON`)); drawMage(player, player.nick); });
   else { p2.clones.forEach(clone => drawMage({ ...p2, x: clone.x, y: clone.y }, `${rivalLabel} // KLON`)); drawMage(p2, rivalLabel); botPlayers.forEach(player => drawMage(player, player.nick)); }
 }
+function drawEagleProjectile(spell) {
+  ctx.save();
+  ctx.translate(spell.x, spell.y);
+  ctx.rotate(Math.atan2(spell.vy, spell.vx));
+  ctx.shadowColor = spell.color;
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = spell.color;
+  ctx.beginPath();
+  ctx.moveTo(15, 0);
+  ctx.lineTo(3, -4);
+  ctx.lineTo(-8, -13);
+  ctx.lineTo(-5, -3);
+  ctx.lineTo(-16, -7);
+  ctx.lineTo(-8, 0);
+  ctx.lineTo(-16, 7);
+  ctx.lineTo(-5, 3);
+  ctx.lineTo(-8, 13);
+  ctx.lineTo(3, 4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}
 function drawMage(m, label) {
   if (m.invisible) return;
+  const playerAccount = window.playerData?.[currentUser];
+  const ownedPasses = new Set(playerAccount?.ownedPass || []);
+  ['vip', 'svip', 'gvip', 'premium'].forEach(passId => {
+    if (playerAccount?.[passId]) ownedPasses.add(passId);
+  });
+  const sameTeam = onlineMatch ? m === p1 || m.teamId === teamId : m === p1 || m.teamId === 'player-team';
+  const skinColors = ownedPasses.has('premium')
+    ? { player: '#ffffff', opponent: '#171717', ally: '#888888', playerAccent: '#d9d9d9', opponentAccent: '#555555', allyAccent: '#c4c4c4' }
+    : ownedPasses.has('gvip')
+      ? { player: '#45c46a', opponent: '#ed5b9b', ally: '#ffad42', playerAccent: '#b7f2c9', opponentAccent: '#ffc0dc', allyAccent: '#ffe0a6' }
+      : ownedPasses.has('svip')
+        ? { player: '#ff922b', opponent: '#3485eb', ally: '#53d5d0', playerAccent: '#ffd0a1', opponentAccent: '#b6d8ff', allyAccent: '#b6fff4' }
+        : ownedPasses.has('vip')
+          ? { player: '#ffd43b', opponent: '#8b5cf6', ally: '#62c987', playerAccent: '#fff0a3', opponentAccent: '#c4a8ff', allyAccent: '#b7f2c9' }
+      : null;
+  const appearance = skinColors
+    ? {
+        color: sameTeam ? (m === p1 ? skinColors.player : skinColors.ally) : skinColors.opponent,
+        accent: sameTeam ? (m === p1 ? skinColors.playerAccent : skinColors.allyAccent) : skinColors.opponentAccent
+      }
+    : { color: m.color, accent: m.accent };
   ctx.save(); ctx.translate(m.x, m.y);
   const reflectTime = m === p1 ? p1.reflectShield : m === p2 ? p2.reflectShield : 0;
   const shieldTime = m === p1 ? p1.shield : 0;
@@ -810,14 +926,14 @@ function drawMage(m, label) {
   ctx.fillStyle = hpRatio > .6 ? '#6ce4b5' : hpRatio > .3 ? '#f6c76b' : '#ff7368'; ctx.fillRect(-barWidth / 2, -78, barWidth * hpRatio, 9);
   ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)'; ctx.strokeRect(-barWidth / 2, -78, barWidth, 9);
   ctx.fillStyle = '#f4f7ff'; ctx.font = '700 9px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(`${Math.max(0, Math.ceil(m.hp || 0))}/${Math.ceil(m.maxHp || 1)}`, 0, -87);
-  ctx.shadowColor = m.color; ctx.shadowBlur = 16; ctx.fillStyle = m.color; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
-  ctx.shadowBlur = 0; ctx.fillStyle = '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowColor = appearance.color; ctx.shadowBlur = 16; ctx.fillStyle = appearance.color; ctx.beginPath(); ctx.moveTo(0, -52); ctx.lineTo(28, 4); ctx.lineTo(22, 34); ctx.lineTo(0, 48); ctx.lineTo(-22, 34); ctx.lineTo(-28, 4); ctx.closePath(); ctx.fill();
+  ctx.shadowBlur = 0; ctx.fillStyle = skinColors ? appearance.color : '#211934'; ctx.beginPath(); ctx.arc(0, -23, 15, 0, Math.PI * 2); ctx.fill();
   const hatId = m === p1 ? getEquippedHat() : (m.hatId || (m === p2 ? opponentProfile.hatId : ''));
   if (hats[hatId]) { ctx.fillStyle = hatId === 'strength-hat' ? '#ffcf67' : hatId === 'guard-hat' ? '#91d8ee' : '#d9d4f1'; ctx.beginPath(); ctx.moveTo(-20, -43); ctx.lineTo(-14, -58); ctx.lineTo(14, -58); ctx.lineTo(20, -43); ctx.closePath(); ctx.fill(); ctx.fillRect(-23, -44, 46, 5); }
-  ctx.strokeStyle = m.accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
-  ctx.fillStyle = m.accent; ctx.font = '700 11px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(label, 0, 67); ctx.restore();
+  ctx.strokeStyle = appearance.accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
+  ctx.fillStyle = appearance.accent; ctx.font = '700 11px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(label, 0, 67); ctx.restore();
 }
-function updateDeviceControls() { document.getElementById('touchControls').classList.toggle('hidden', deviceMode !== 'mobile' || !running); chatUi.button.classList.toggle('hidden', !running); document.getElementById('touchCast').textContent = selectedWizard === 'hercules' ? 'PIĘŚĆ' : 'STRZAŁ'; }
+function updateDeviceControls() { const wizard = wizards[selectedWizard]; document.getElementById('touchControls').classList.toggle('hidden', deviceMode !== 'mobile' || !running); chatUi.button.classList.toggle('hidden', !running); document.getElementById('touchCast').textContent = selectedWizard === 'hercules' ? 'PIĘŚĆ' : 'STRZAŁ'; document.getElementById('touchAbility').textContent = selectedWizard === 'illusionist' ? (p1.invisible ? 'ZAKOŃCZ E' : 'NIEWIDZIALNOŚĆ E') : 'GADŻET E'; const secondary = document.getElementById('touchSecondary'); secondary.classList.toggle('hidden', !wizard.secondaryAbilityType && !wizard.fullShield); secondary.textContent = wizard.secondaryAbilityType === 'teleport' ? 'TELEPORT Q' : wizard.secondaryAbilityType === 'eagle-heal' ? 'LECZ Q' : 'TARCZA Q'; }
 function resetJoystick() { joystickX = 0; joystickY = 0; keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false; document.getElementById('joystickKnob').style.transform = 'translate(-50%, -50%)'; }
 function moveJoystick(event) { const joystick = document.getElementById('joystick'); const rect = joystick.getBoundingClientRect(); const dx = event.clientX - (rect.left + rect.width / 2); const dy = event.clientY - (rect.top + rect.height / 2); const radius = rect.width * .34; const distance = Math.hypot(dx, dy); const scale = distance > radius ? radius / distance : 1; joystickX = dx * scale / radius; joystickY = dy * scale / radius; document.getElementById('joystickKnob').style.transform = `translate(calc(-50% + ${joystickX * radius}px), calc(-50% + ${joystickY * radius}px))`; keys.KeyA = joystickX < -.2; keys.KeyD = joystickX > .2; keys.KeyW = joystickY < -.2; keys.KeyS = joystickY > .2; }
 function updateOrientationPrompt() { const portraitRequired = deviceMode === 'mobile' && matchMedia('(orientation: portrait) and (max-width: 1100px)').matches; const prompt = document.getElementById('rotatePrompt'); prompt.classList.toggle('show', portraitRequired); prompt.classList.toggle('landscape-required', portraitRequired); }
@@ -861,11 +977,11 @@ function handleNetworkMessageV2(message) {
     const sameTeam = message.teamId === teamId; spells.push({ ...incoming, x: (sameTeam ? incoming.x : 1 - incoming.x) * W, y: incoming.y * H, vx: (sameTeam ? incoming.vx : -incoming.vx) * W, vy: incoming.vy * H, owner, teamId: message.teamId }); return;
   }
   if (message.type === 'reflect') { spells.forEach(spell => { if (spell.id === message.id) spell.life = 0; }); const shot = message.spell; const owner = remotePlayers.get(String(message.reflector || '').toLowerCase()) || { ...p2, nick: message.reflector, teamId: 'opponent' }; spells.push({ ...shot, x: (1 - shot.x) * W, y: shot.y * H, vx: -shot.vx * W, vy: shot.vy * H, owner, teamId: owner.teamId }); return; }
-  if (message.type === 'damage') { if (!message.targetNick || message.targetNick.toLowerCase() === currentUser.toLowerCase()) { p1.hp -= message.amount; if (p1.hp <= 0) endGame('GRACZ 2'); } else { const target = remotePlayers.get(message.targetNick.toLowerCase()); if (target) target.hp -= message.amount; } return; }
+  if (message.type === 'damage') { if (!message.targetNick || message.targetNick.toLowerCase() === currentUser.toLowerCase()) { p1.hp -= message.amount; p1.stunTimer = Math.max(p1.stunTimer || 0, Number(message.stunDuration) || 0); if (p1.hp <= 0) endGame('GRACZ 2'); } else { const target = remotePlayers.get(message.targetNick.toLowerCase()); if (target) { target.hp -= message.amount; target.stunTimer = Math.max(target.stunTimer || 0, Number(message.stunDuration) || 0); } } return; }
   if (message.type === 'round-ended') {
     const won = message.winnerTeamId ? message.winnerTeamId === teamId : message.winnerNick?.toLowerCase() === currentUser.toLowerCase();
     if (won && !matchRewardGranted && opponentProfile.dropEnabled && keychains[opponentProfile.dropCharm]) { grantKeychain(opponentProfile.dropCharm); matchRewardGranted = true; setToast(`ZDOBYWASZ BRELOCZEK: ${keychains[opponentProfile.dropCharm].name}`); }
-    if (running) { if (won) { coins += 100; persistCoins(); ui.result.textContent = 'WYGRAŁEŚ!'; ui.result.classList.remove('hidden', 'loss'); ui.result.classList.add('win'); } else { coins = Math.max(0, coins - 50); persistCoins(); ui.result.textContent = 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden', 'win'); ui.result.classList.add('loss'); } }
+    if (running) { if (won) { const reward = window.applyMoneyMultiplier ? window.applyMoneyMultiplier(100) : 100; coins += reward; persistCoins(); ui.result.textContent = 'WYGRAŁEŚ!'; ui.result.classList.remove('hidden', 'loss'); ui.result.classList.add('win'); setToast(`+${reward} MONET ZA ZWYCIĘSTWO`); } else { coins = Math.max(0, coins - 50); persistCoins(); ui.result.textContent = 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden', 'win'); ui.result.classList.add('loss'); } }
     gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); ui.join.textContent = 'RUNDA ZAKOŃCZONA // DOŁĄCZ PONOWNIE'; updateDeviceControls(); if (matchSocket) sendNetwork({ type: 'leave-room' }); return;
   }
   if (message.type === 'opponent-left') { gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'PRZECIWNIK OPUŚCIŁ GRĘ'; updateDeviceControls(); setToast('PRZECIWNIK OPUŚCIŁ GRĘ'); }
@@ -881,6 +997,13 @@ document.getElementById('touchCast').addEventListener('pointerdown', event => { 
 document.getElementById('touchCast').addEventListener('pointerup', () => { keys.Space = false; });
 document.getElementById('touchCast').addEventListener('pointercancel', () => { keys.Space = false; });
 document.getElementById('touchAbility').addEventListener('pointerdown', event => { event.preventDefault(); useAbility(); });
+document.getElementById('touchSecondary').addEventListener('pointerdown', event => { event.preventDefault(); useSecondaryAbility(); });
+addEventListener('keydown', event => {
+  if (event.code !== 'KeyQ' || event.repeat) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  useSecondaryAbility();
+}, true);
 profileUi.button.addEventListener('click', openProfile);
 profileUi.close.addEventListener('click', () => profileUi.modal.classList.add('hidden'));
 document.getElementById('openRankingsButton').addEventListener('click', () => window.openRanking());
@@ -1281,8 +1404,8 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     <button data-shop="characters" class="active">POSTACIE</button>
     <button data-shop="keychains">BRELOCZKI</button>
     <button data-shop="hats">KAPELUSZE</button>
+    <button data-shop="skins">SKINY</button>
     <button data-shop="passes">KARNETY</button>
-    <button data-shop="passCharacters">POSTACIE KARNETOWE</button>
   `;
 
   // Wstawiamy zakładki na górę sklepu
@@ -1292,25 +1415,25 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const charactersSection = document.createElement('div');
   const keychainsSection = document.createElement('div');
   const hatsSection = document.createElement('div');
+  const skinsSection = document.createElement('div');
   const passesSection = document.createElement('div');
-  const passCharactersSection = document.createElement('div');
 
   charactersSection.id = 'shopCharacters';
   keychainsSection.id = 'shopKeychains';
   hatsSection.id = 'shopHats';
+  skinsSection.id = 'shopSkins';
   passesSection.id = 'shopPasses';
-  passCharactersSection.id = 'shopPassCharacters';
 
   const wizardOffers = shopWindow.querySelector('.wizard-offers');
   const wizardDetail = shopWindow.querySelector('.wizard-detail');
   const passShop = shopWindow.querySelector('.pass-shop');
-  passCharactersSection.innerHTML = `<section class="pass-character-shop" aria-labelledby="passCharacterTitle"><div class="eyebrow">ARCANE MARKET / NAGRODY KARNETÓW</div><h4 id="passCharacterTitle">POSTACIE Z KARNETÓW</h4><div id="passCharacterOffers" class="pass-character-grid"></div><p id="passCharacterEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH POSTACI Z KARNETÓW</p></section>`;
   const ownedEmpty = document.createElement('p');
   ownedEmpty.className = 'shop-owned-empty hidden';
   ownedEmpty.textContent = 'BRAK POSIADANYCH PRZEDMIOTÓW W TEJ KATEGORII';
   charactersSection.append(wizardOffers, wizardDetail);
   keychainsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="keychains">OTWÓRZ SKRZYNIĘ Z BRELOCZKAMI</button><div class="keychain-collection"></div><div class="shop-chest-result" id="shopKeychainChestResult"></div>`;
   hatsSection.innerHTML = `<button type="button" class="shop-chest-button" data-chest="hats">OTWÓRZ SKRZYNIĘ Z KAPELUSZAMI</button><div class="hat-collection"></div><div class="shop-chest-result" id="shopHatChestResult"></div>`;
+  skinsSection.innerHTML = `<section class="skin-shop" aria-labelledby="skinShopTitle"><div class="eyebrow">ARCANE MARKET / SKINY</div><h4 id="skinShopTitle">SKINY CZARODZIEJÓW</h4><p class="skin-shop-note">Skiny są dołączone do odpowiednich karnetów.</p><div id="skinOffers" class="skin-offers"></div><p id="skinShopEmpty" class="shop-owned-empty hidden">BRAK POSIADANYCH SKINÓW</p></section>`;
   keychainsSection.appendChild(ownedEmpty.cloneNode(true));
   hatsSection.appendChild(ownedEmpty.cloneNode(true));
   passesSection.append(passShop);
@@ -1319,14 +1442,14 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   shopWindow.appendChild(charactersSection);
   shopWindow.appendChild(keychainsSection);
   shopWindow.appendChild(hatsSection);
+  shopWindow.appendChild(skinsSection);
   shopWindow.appendChild(passesSection);
-  shopWindow.appendChild(passCharactersSection);
 
   // Domyślnie widoczna sekcja POSTACIE
   keychainsSection.style.display = 'none';
   hatsSection.style.display = 'none';
+  skinsSection.style.display = 'none';
   passesSection.style.display = 'none';
-  passCharactersSection.style.display = 'none';
 
   // Obsługa przełączania zakładek
   tabs.addEventListener('click', (e) => {
@@ -1336,20 +1459,17 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     e.target.classList.add('active');
 
     const mode = e.target.dataset.shop;
-    const sections = { characters: charactersSection, keychains: keychainsSection, hats: hatsSection, passes: passesSection, passCharacters: passCharactersSection };
+    const sections = { characters: charactersSection, keychains: keychainsSection, hats: hatsSection, skins: skinsSection, passes: passesSection };
     Object.entries(sections).forEach(([name, section]) => { section.style.display = name === mode ? 'block' : 'none'; });
+    if (mode === 'skins') window.refreshSkinShop?.();
     if (mode === 'passes') window.updatePassShop?.();
-    if (mode === 'passCharacters') window.refreshPassCharacterShop?.();
   });
-  passCharactersSection.addEventListener('click', event => {
-    const button = event.target.closest('[data-character-action]');
+  skinsSection.addEventListener('click', event => {
+    const button = event.target.closest('[data-skin-pass]');
     if (!button) return;
-    if (button.dataset.characterAction === 'buy') buyWizard(button.dataset.wizardId);
-    else useWizard(button.dataset.wizardId);
-    window.refreshPassCharacterShop?.();
-    syncProfileToServer();
+    tabs.querySelector('[data-shop="passes"]').click();
+    window.selectPass?.(button.dataset.skinPass);
   });
-
   window.refreshShopCollections = function () {
     const shopKeychains = keychainsSection.querySelector('.keychain-collection');
     const shopHats = hatsSection.querySelector('.hat-collection');
@@ -1369,7 +1489,6 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   const updateBackpackAndShop = updateBackpack;
   updateBackpack = function () { updateBackpackAndShop(); window.refreshShopCollections(); };
   window.refreshShopCollections();
-  window.refreshPassCharacterShop?.();
   [keychainsSection, hatsSection].forEach(section => section.addEventListener('click', event => {
     const equip = event.target.closest('[data-equip]');
     const combine = event.target.closest('[data-combine]');
@@ -2989,13 +3108,77 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
   };
   const PASS_DAILY_REWARDS = { vip: 500, svip: 750, gvip: 1000, premium: 1500 };
   const PASS_BENEFITS = {
-    vip: { character: 'ELEKTRYCZNY', skin: 'VIP ELEKTRYCZNY', multiplier: 'x1,25' },
-    svip: { character: 'ILUZJONISTA', skin: 'SVIP ILUZJONISTA', multiplier: 'x1,5' },
-    gvip: { character: 'PIORUN', skin: 'GVIP PIORUN', multiplier: 'x1,75' },
-    premium: { character: 'WŁADCA ORŁÓW', skin: 'PREMIUM WŁADCA ORŁÓW', multiplier: 'x2' }
+    vip: { character: 'ELEKTRYCZNY', skin: 'ZŁOTY (WARTOŚĆ 10 000 MONET)', multiplier: 'x1,25' },
+    svip: { character: 'ILUZJONISTA', skin: 'POMARAŃCZOWY // NIEBIESKI // SOJUSZNIK TURKUSOWY (WARTOŚĆ 23 000 MONET)', multiplier: 'x1,5' },
+    gvip: { character: 'PIORUN', skin: 'ZIELONY // RÓŻOWY // SOJUSZNIK POMARAŃCZOWY (WARTOŚĆ 35 000 MONET)', multiplier: 'x1,75' },
+    premium: { character: 'WŁADCA ORŁÓW', skin: 'MONOCHROMATYCZNY (WARTOŚĆ 50 000 MONET)', multiplier: 'x2' }
   };
   const LEGACY_DAILY_KEYS = { vip: 'vipDaily_', svip: 'svipDaily_', gvip: 'gvipDaily_', premium: 'premiumDaily_' };
   let selectedPassId = '';
+
+  window.refreshSkinShop = function () {
+    const offers = document.getElementById('skinOffers');
+    const empty = document.getElementById('skinShopEmpty');
+    if (!offers || !empty) return;
+
+    const account = currentUser ? playerData[currentUser] : null;
+    const skins = [
+      {
+        passId: 'vip',
+        name: 'ZŁOTY',
+        colors: 'TY: ŻÓŁTY // PRZECIWNIK: FIOLETOWY // SOJUSZNIK: ZIELONY',
+        value: 10000,
+        multiplier: 'x1,25',
+        owned: Boolean(account?.ownedPass?.includes('vip') || account?.vip)
+      },
+      {
+        passId: 'svip',
+        name: 'ISKRA',
+        colors: 'TY: POMARAŃCZOWY // PRZECIWNIK: NIEBIESKI // SOJUSZNIK: TURKUSOWY',
+        value: 23000,
+        multiplier: 'x1,50',
+        owned: Boolean(account?.ownedPass?.includes('svip') || account?.svip)
+      },
+      {
+        passId: 'gvip',
+        name: 'WIOSENNY',
+        colors: 'TY: ZIELONY // PRZECIWNIK: RÓŻOWY // SOJUSZNIK: POMARAŃCZOWY',
+        value: 35000,
+        multiplier: 'x1,75',
+        owned: Boolean(account?.ownedPass?.includes('gvip') || account?.gvip)
+      },
+      {
+        passId: 'premium',
+        name: 'MONOCHROMATYCZNY',
+        colors: 'TY: BIAŁY // PRZECIWNIK: CZARNY // SOJUSZNIK: SZARY',
+        value: 50000,
+        multiplier: 'x2',
+        owned: Boolean(account?.ownedPass?.includes('premium') || account?.premium)
+      }
+    ].filter(skin => !ownedOnly || skin.owned);
+    offers.replaceChildren();
+    skins.forEach(skin => {
+      const card = document.createElement('article');
+      card.className = `skin-card${skin.owned ? ' owned' : ''}`;
+
+      const name = document.createElement('strong');
+      name.textContent = skin.name;
+      const source = document.createElement('span');
+      source.textContent = skin.colors;
+      const status = document.createElement('small');
+      status.textContent = skin.owned
+        ? `ODBLOKOWANY // MNOŻNIK PIENIĘDZY ${skin.multiplier}`
+        : `WARTOŚĆ ${skin.value.toLocaleString('pl-PL')} MONET // DOSTAJESZ Z KARNETU ${skin.passId.toUpperCase()}`;
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.skinPass = skin.passId;
+      button.textContent = skin.owned ? `KARNET ${skin.passId.toUpperCase()}` : `ODBLOKUJ Z ${skin.passId.toUpperCase()}`;
+
+      card.append(name, source, status, button);
+      offers.appendChild(card);
+    });
+    empty.classList.toggle('hidden', !ownedOnly || skins.length > 0);
+  };
 
   function getPolishDateParts(date = new Date()) {
     const parts = new Intl.DateTimeFormat('en-GB', {
@@ -3069,6 +3252,7 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     });
     document.getElementById('passOwnedEmpty')?.classList.toggle('hidden', !ownedOnly || hasOwnedPass);
     updatePassDetails();
+    window.refreshSkinShop();
   }
   window.updatePassShop = updatePassShop;
 
@@ -3235,6 +3419,22 @@ auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth
     document.getElementById('passShopStatus').textContent = sellActive
       ? `SPRZEDANO ${PASS_NAMES[activePass]} I AKTYWOWANO ${PASS_NAMES[passId]}`
       : `KUPIONO ${PASS_NAMES[passId]}${account.activePass === passId ? ' // AKTYWNY' : ''}`;
+  };
+
+  const applyPassMoneyMultiplier = window.applyMoneyMultiplier;
+  window.applyMoneyMultiplier = function (amount) {
+    const account = currentUser ? playerData[currentUser] : null;
+    const ownedPasses = new Set(account?.ownedPass || []);
+    ['vip', 'svip', 'gvip', 'premium'].forEach(passId => {
+      if (account?.[passId]) ownedPasses.add(passId);
+    });
+    const passMultiplier = ownedPasses.has('premium') ? 2
+      : ownedPasses.has('gvip') ? 1.75
+        : ownedPasses.has('svip') ? 1.5
+          : ownedPasses.has('vip') ? 1.25
+            : 0;
+    if (passMultiplier) return Math.floor(amount * passMultiplier);
+    return applyPassMoneyMultiplier ? applyPassMoneyMultiplier(amount) : amount;
   };
 
   updatePassShop();
