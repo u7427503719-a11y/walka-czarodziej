@@ -242,6 +242,39 @@
             <div class="owner-message" id="ownerMessage"></div>
           </div>
         </div>
+        <div class="owner-panel hidden" id="staffAdminPanel">
+          <div class="owner-panel-header">
+            <div class="eyebrow">ADMINISTRATOR // PANEL</div>
+            <button type="button" class="owner-toggle" id="adminClose">ZWIŃ</button>
+          </div>
+          <div class="owner-panel-body">
+            <h4>ZGŁOSZENIA GRACZY</h4>
+            <div id="adminReports" class="staff-report-list"></div>
+            <div id="adminRoleControls" class="hidden">
+              <h4>NADAWANIE RÓL // WŁAŚCICIEL</h4>
+              <input id="roleNick" type="text" placeholder="Nick gracza">
+              <div class="owner-row"><button id="giveAdmin" type="button">NADAJ ADMINA</button><button id="giveHalfAdmin" type="button">NADAJ PÓŁ-ADMINA</button><button id="removeRole" type="button">USUŃ ROLĘ</button></div>
+            </div>
+            <h4>ZAWIESZENIE GRACZA</h4>
+            <input id="suspendNick" type="text" placeholder="Nick gracza">
+            <div class="owner-row"><button id="suspendBtn" type="button">ZAWIEŚ // 1 DZIEŃ</button><button id="unsuspendBtn" type="button">ODWIEŚ</button></div>
+          </div>
+        </div>
+        <div class="owner-panel hidden" id="staffHalfAdminPanel">
+          <div class="owner-panel-header">
+            <div class="eyebrow">PÓŁ-ADMIN // PANEL</div>
+            <button type="button" class="owner-toggle" id="halfClose">ZWIŃ</button>
+          </div>
+          <div class="owner-panel-body">
+            <h4>ZAWIEŚ GRACZA // 1 DZIEŃ</h4>
+            <input id="halfSuspendNick" type="text" placeholder="Nick gracza">
+            <div class="owner-row"><button id="halfSuspendBtn" type="button">ZAWIEŚ GRACZA</button></div>
+            <h4>WYŚLIJ ZGŁOSZENIE</h4>
+            <input id="halfReportNick" type="text" placeholder="Nick gracza">
+            <textarea id="halfReportText" rows="3" placeholder="Co się stało?"></textarea>
+            <div class="owner-row"><button id="halfReportBtn" type="button">WYŚLIJ ZGŁOSZENIE</button></div>
+          </div>
+        </div>
         <div class="shop-buttons">
           <button id="shopButton" class="shop-button">OTWÓRZ SKLEP <span>+</span></button>
           <button id="backpackButton" class="shop-button backpack-button" type="button">PLECAK <span>▣</span></button>
