@@ -267,3 +267,15 @@ html, body { overflow-y: auto; overflow-x: hidden; }
 .preview-exit { position: fixed; z-index: 10; top: 20px; right: 20px; padding: 11px 15px; border: 1px solid var(--orange); background: rgba(7,25,34,.9); color: var(--orange); cursor: pointer; font: 700 10px 'Space Grotesk'; letter-spacing: .1em; }
 .preview-exit:hover { background: rgba(255,176,75,.18); }
 @media (max-width: 560px) { .wizard-actions { flex-wrap: wrap; }.wizard-actions button { min-width: calc(50% - 4px); } .preview-exit { top: 12px; right: 12px; } }
+
+.game-over-screen { position: absolute; z-index: 20; inset: 0; display: grid; place-items: center; padding: 24px; background: rgba(3, 10, 23, .88); backdrop-filter: blur(9px); }
+.game-over-panel { width: min(460px, 100%); padding: clamp(28px, 6vw, 52px); border: 1px solid rgba(115, 225, 221, .45); background: linear-gradient(145deg, rgba(16, 31, 57, .98), rgba(7, 19, 34, .98)); box-shadow: 0 24px 90px rgba(0, 0, 0, .55), inset 0 0 40px rgba(115, 225, 221, .05); text-align: center; }
+.game-over-mark { margin: 24px 0 8px; color: var(--cyan); font-size: 34px; text-shadow: 0 0 24px currentColor; }
+.game-over-panel h2 { margin: 0; color: var(--cyan); font: 800 clamp(52px, 12vw, 82px)/.95 'Barlow Condensed', sans-serif; letter-spacing: .02em; }
+.game-over-panel h2.loss { color: var(--red); }
+.game-over-panel p { margin: 12px 0 28px; color: var(--muted); font-size: 10px; letter-spacing: .16em; }
+.game-over-actions { display: grid; gap: 10px; }
+.game-over-actions button { min-height: 48px; padding: 13px 18px; border: 1px solid var(--cyan); background: var(--cyan); color: #06141d; cursor: pointer; font: 700 11px 'Space Grotesk', sans-serif; letter-spacing: .12em; transition: background .2s ease, transform .2s ease; }
+.game-over-actions button:hover { background: #b6f1e7; transform: translateY(-2px); }
+.game-over-actions button + button { border-color: var(--line); background: transparent; color: var(--ink); }
+.game-over-actions button + button:hover { border-color: var(--orange); color: var(--orange); }
