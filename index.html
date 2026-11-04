@@ -105,33 +105,41 @@
       <div class="profile-window">
         <button id="profileClose" class="shop-close" type="button">X</button>
         <div class="eyebrow">PROFIL GRACZA</div>
-        <h3 id="profileName">PROFIL</h3>
+        <div class="profile-heading"><h3 id="profileName">PROFIL</h3><button id="profileSettingsButton" class="profile-settings-button" type="button" aria-label="Pokaż lub ukryj ustawienia profilu" aria-controls="profileSettings" aria-expanded="true">⚙️</button></div>
         <div class="profile-ranking-actions">
           <button id="openRankingsButton" type="button">TOPKI</button>
           <button id="leaderboardButton" type="button">RANKING MIESIĄCA <span>TOP 5</span></button>
         </div>
         <canvas id="avatarDrawCanvas" width="280" height="280" aria-label="Rysunek avatara"></canvas>
         <div class="profile-actions"><button id="avatarClear" type="button">WYCZYŚĆ RYSUNEK</button><button id="avatarSave" type="button">ZAPISZ AVATAR</button></div>
-        <section class="profile-account-controls">
-          <button id="showNickChange" type="button">ZMIANA NICKU</button>
-          <form id="nickChangeForm" class="hidden">
-            <label>OBECNY NICK<input id="changeNickCurrent" autocomplete="username" required></label>
-            <label>OBECNE HASŁO<input id="changeNickPassword" type="password" autocomplete="current-password" required></label>
-            <label>NOWY NICK<input id="changeNickNew" maxlength="16" required></label>
-            <label class="consent-label"><input id="confirmNickChange" type="checkbox" required> POTWIERDZAM ZMIANĘ NICKU</label>
-            <button type="submit">ZAPISZ NICK</button><span id="nickChangeMessage" class="auth-error"></span>
-          </form>
-          <button id="showPasswordChange" type="button">ZMIANA HASŁA</button>
-          <form id="passwordChangeForm" class="hidden">
-            <label>OBECNE HASŁO<input id="changePasswordCurrent" type="password" autocomplete="current-password" required></label>
-            <label>NOWE HASŁO<input id="changePasswordNew" type="password" minlength="4" autocomplete="new-password" required></label>
-            <label>POWTÓRZ NOWE HASŁO<input id="changePasswordRepeat" type="password" minlength="4" autocomplete="new-password" required></label>
-            <button type="submit">ZAPISZ HASŁO</button><span id="passwordChangeMessage" class="auth-error"></span>
-          </form>
-          <label class="profile-select-label" for="titleSelect">TYTUŁ POSTACI<select id="titleSelect"></select></label>
-        </section>
-        <label class="drop-toggle"><input id="dropEnabled" type="checkbox"> PRZEKAŻ WYBRANY BRELOCZEK PO PRZEGRANEJ</label>
-        <label class="profile-select-label" for="dropKeychain">BRELOCZEK DO PRZEKAZANIA<select id="dropKeychain"></select></label>
+        <div id="profileSettings">
+          <section class="game-settings">
+            <h4>USTAWIENIA GRY</h4>
+            <label class="game-setting-row" for="languageSelect"><span>JĘZYK</span><span class="language-picker"><span id="languageFlag" aria-hidden="true">🇵🇱</span><select id="languageSelect" aria-label="Język gry"><option value="pl">🇵🇱 Polski</option><option value="en-GB">🇬🇧 English (British)</option><option value="de">🇩🇪 Deutsch</option><option value="es">🇪🇸 Español</option><option value="ru">🇷🇺 Русский</option></select></span></label>
+            <label class="game-setting-row" for="rejectFriendRequests"><span>ODRZUCAJ ZAPROSZENIA DO ZNAJOMYCH</span><input id="rejectFriendRequests" type="checkbox"></label>
+            <label class="game-setting-row" for="themeSelect"><span>MOTYW</span><select id="themeSelect"><option value="dark">CIEMNY</option><option value="light">JASNY</option></select></label>
+          </section>
+          <section class="profile-account-controls">
+            <button id="showNickChange" type="button">ZMIANA NICKU</button>
+            <form id="nickChangeForm" class="hidden">
+              <label>OBECNY NICK<input id="changeNickCurrent" autocomplete="username" required></label>
+              <label>OBECNE HASŁO<input id="changeNickPassword" type="password" autocomplete="current-password" required></label>
+              <label>NOWY NICK<input id="changeNickNew" maxlength="16" required></label>
+              <label class="consent-label"><input id="confirmNickChange" type="checkbox" required> POTWIERDZAM ZMIANĘ NICKU</label>
+              <button type="submit">ZAPISZ NICK</button><span id="nickChangeMessage" class="auth-error"></span>
+            </form>
+            <button id="showPasswordChange" type="button">ZMIANA HASŁA</button>
+            <form id="passwordChangeForm" class="hidden">
+              <label>OBECNE HASŁO<input id="changePasswordCurrent" type="password" autocomplete="current-password" required></label>
+              <label>NOWE HASŁO<input id="changePasswordNew" type="password" minlength="4" autocomplete="new-password" required></label>
+              <label>POWTÓRZ NOWE HASŁO<input id="changePasswordRepeat" type="password" minlength="4" autocomplete="new-password" required></label>
+              <button type="submit">ZAPISZ HASŁO</button><span id="passwordChangeMessage" class="auth-error"></span>
+            </form>
+            <label class="profile-select-label" for="titleSelect">TYTUŁ POSTACI<select id="titleSelect"></select></label>
+          </section>
+          <label class="drop-toggle"><input id="dropEnabled" type="checkbox"> PRZEKAŻ WYBRANY BRELOCZEK PO PRZEGRANEJ</label>
+          <label class="profile-select-label" for="dropKeychain">BRELOCZEK DO PRZEKAZANIA<select id="dropKeychain"></select></label>
+        </div>
         <section class="account-directory">
           <h4>ISTNIEJĄCE KONTA</h4>
           <div class="account-list" id="profileAccountList"></div>
@@ -239,7 +247,7 @@
             <div class="owner-row"><button id="addAdminButton">DODAJ ADMINA</button></div>
             <div class="owner-row"><button id="banButton">ZABANUJ</button><button id="unbanButton">ODBANUJ</button></div>
             <div class="owner-row"><input id="ownerCoins" type="number" min="1" placeholder="Monety"><button id="giveCoinsButton">DAJ MONETY</button><button id="takeCoinsButton">ODEJMIJ</button></div>
-            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="electric">ELEKTRYCZNY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="illusionist">ILUZJONISTA</option><option value="eaglelord">WŁADCA ORŁÓW</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
+            <div class="owner-row"><select id="ownerWizard"><option value="storm">BURZOWY</option><option value="electric">ELEKTRYCZNY</option><option value="guardian">STRAŻNIK</option><option value="healer">UZDROWICIEL</option><option value="cloner">KLONER</option><option value="aegis">AEGIS</option><option value="knight">RYCERZ</option><option value="hercules">HERKULES</option><option value="sprinter">SPRINTER</option><option value="shieldbearer">TARCZOWNIK</option><option value="thunder">PIORUN</option><option value="illusionist">ILUZJONISTA</option><option value="eaglelord">WŁADCA ORŁÓW</option><option value="napoleon">NAPOLEON // TYLKO WŁAŚCICIEL</option><option value="overlord">WŁADCA // TYLKO WŁAŚCICIEL</option></select><button id="giveWizardButton">DAJ CZARODZIEJA</button></div>
             <div class="owner-row"><input id="ownerPassword" type="password" autocomplete="current-password" placeholder="HASŁO WŁAŚCICIELA"><button id="verifyOwnerPasswordButton" type="button">SPRAWDŹ HASŁO</button></div>
             <div class="owner-row"><button id="grantOctoberButton" class="hidden" type="button">NADAJ PAŹDZIERNIKA</button></div>
             <div class="owner-row"><button id="resetRankingButton" class="hidden" type="button">RESETUJ RANGI GRACZY</button></div>
@@ -312,6 +320,7 @@
               <button class="wizard-card" data-wizard="demonwanderer"><b>DEMONICZNY WĘDROWIEC</b><span>9000 MONET</span></button>
               <button class="wizard-card" data-wizard="sanctifier"><b>ŚWIĄTY LECZYCIEL</b><span>8200 MONET</span></button>
               <button class="wizard-card" data-wizard="eaglelord"><b>WŁADCA ORŁÓW</b><span>250000 MONET // KARNET PREMIUM</span></button>
+              <button class="wizard-card" data-wizard="napoleon"><b>NAPOLEON</b><span>TYLKO NADAWANY PRZEZ WŁAŚCICIELA</span></button>
               <button class="wizard-card" data-wizard="october"><b>PAŹDZIERNIK</b><span>POSTAĆ SPECJALNA</span></button>
               <button class="wizard-card" data-wizard="overlord"><b>WŁADCA</b><span>TYLKO TEST123</span></button>
             </div>
