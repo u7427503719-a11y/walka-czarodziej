@@ -523,7 +523,20 @@ async function handleOwnerRequest(request, response) {
   const accounts = readAccounts();
   const requesterEntry = findAccountEntry(accounts, input.ownerNick);
   const requester = requesterEntry?.[1];
-  const ownerAuthenticated = verifyOwnerCredentials(input.ownerNick, input.password, accounts);
+  const ownerPasswordAuthenticated = verifyOwnerCredentials(input.ownerNick, input.password, accounts);
+  const requesterSessionToken = String(input.sessionToken || '');
+  const requesterSession = sessionTokens.get(requesterSessionToken);
+  const ownerSessionAuthenticated = action === 'grant-wizard' &&
+    String(input.wizardId || '') === 'napoleon' &&
+    requesterEntry?.[0] === String(input.ownerNick || '').trim().toLowerCase() &&
+    ownerNicks.includes(requesterEntry[0]) &&
+    requester?.role === 'owner' &&
+    requester?.banned !== true &&
+    requesterSession?.accountKey === requesterEntry[0] &&
+    requesterSession.accountHash === requester.hash &&
+    requesterSession.expiresAt > Date.now() &&
+    activeSessionsByNick.get(requesterEntry[0]) === requesterSessionToken;
+  const ownerAuthenticated = ownerPasswordAuthenticated || ownerSessionAuthenticated;
   const adminBanAuthenticated = action === 'set-ban' && requester?.role === 'admin' &&
     requester.banned !== true && verifyAccountPassword(requester, input.password);
   if (!ownerAuthenticated && !adminBanAuthenticated) { sendJson(response, 401, { error: 'NIEPRAWIDŁOWE HASŁO WŁAŚCICIELA' }); return; }
