@@ -22,7 +22,7 @@ addEventListener('click', event => {
   if (passAction) window.handlePassAction?.(passAction.dataset.passAction);
 });
 const auth = { screen: document.getElementById('authScreen'), registerTab: document.getElementById('registerTab'), loginTab: document.getElementById('loginTab'), registerForm: document.getElementById('registerForm'), loginForm: document.getElementById('loginForm'), registerNick: document.getElementById('registerNick'), registerPassword: document.getElementById('registerPassword'), registerNickError: document.getElementById('registerNickError'), loginNick: document.getElementById('loginNick'), loginPassword: document.getElementById('loginPassword'), loginError: document.getElementById('loginError'), ownerChallengeForm: document.getElementById('ownerChallengeForm'), ownerChallengeQuestion: document.getElementById('ownerChallengeQuestion'), ownerChallengeAnswer: document.getElementById('ownerChallengeAnswer'), ownerChallengeError: document.getElementById('ownerChallengeError') };
-const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), resetRanking: document.getElementById('resetRankingButton'), giveWizard: document.getElementById('giveWizardButton'), giveNapoleon: document.getElementById('giveNapoleonButton') };
+const ownerUi = { panel: document.getElementById('ownerPanel'), panelBody: document.getElementById('ownerPanelBody'), toggle: document.getElementById('ownerToggleButton'), target: document.getElementById('ownerTarget'), coins: document.getElementById('ownerCoins'), wizard: document.getElementById('ownerWizard'), message: document.getElementById('ownerMessage'), addAdmin: document.getElementById('addAdminButton'), ban: document.getElementById('banButton'), unban: document.getElementById('unbanButton'), giveCoins: document.getElementById('giveCoinsButton'), takeCoins: document.getElementById('takeCoinsButton'), resetAccount: document.getElementById('resetAccountButton'), resetRanking: document.getElementById('resetRankingButton'), giveWizard: document.getElementById('giveWizardButton') };
 ownerUi.password = document.getElementById('ownerPassword');
 ownerUi.verifyPassword = document.getElementById('verifyOwnerPasswordButton');
 ownerUi.grantOctober = document.getElementById('grantOctoberButton');
@@ -540,10 +540,6 @@ async function giveWizard() {
     if (key === currentUser.toLowerCase()) updateShop();
     ownerResult(`${wizards[id].name} DANY GRACZOWI ${account.nick}`);
   } catch (error) { ownerResult(error.message); }
-}
-async function giveNapoleon() {
-  ownerUi.wizard.value = 'napoleon';
-  await giveWizard();
 }
 const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
 const gameOverScreen = document.getElementById('gameOverScreen');
@@ -1353,7 +1349,29 @@ addEventListener('resize', resize); addEventListener('keydown', e => { if (spect
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushProgressSync();
 });
-auth.registerTab.addEventListener('click', () => showAuthForm('register')); auth.loginTab.addEventListener('click', () => showAuthForm('login')); auth.registerForm.addEventListener('submit', registerAccount); auth.loginForm.addEventListener('submit', loginAccount); auth.ownerChallengeForm.addEventListener('submit', answerOwnerChallenge); ui.logout.addEventListener('click', logoutAccount); ownerUi.toggle.addEventListener('click', () => toggleOwnerPanel()); ownerUi.addAdmin.addEventListener('click', addAdmin); ownerUi.ban.addEventListener('click', () => changeBan(true)); ownerUi.unban.addEventListener('click', () => changeBan(false)); ownerUi.giveCoins.addEventListener('click', giveCoins); ownerUi.giveWizard.addEventListener('click', giveWizard); ownerUi.giveNapoleon.addEventListener('click', giveNapoleon); ui.friendsButton.addEventListener('click', () => { setFriendsTab('friends'); ui.friendsModal.classList.remove('hidden'); ui.inviteMessage.textContent = ''; updateFriends(); }); ui.friendsTab.addEventListener('click', () => setFriendsTab('friends')); ui.requestsTab.addEventListener('click', () => setFriendsTab('requests')); ui.suggestionsTab.addEventListener('click', () => setFriendsTab('suggestions')); ui.friendsClose.addEventListener('click', () => ui.friendsModal.classList.add('hidden')); ui.sendInvite.addEventListener('click', sendFriendInvite); ui.suggestionsList.addEventListener('click', event => { const accept = event.target.closest('[data-accept]'); const reject = event.target.closest('[data-reject]'); if (accept) respondToFriendInvite(decodeURIComponent(accept.dataset.accept), true); if (reject) respondToFriendInvite(decodeURIComponent(reject.dataset.reject), false); }); addEventListener('beforeunload', applyInactivePenalty); addEventListener('pagehide', event => { if (!event.persisted) applyInactivePenalty(); }); ensureOwnerAccount(); showAuthForm('register');
+auth.registerTab.addEventListener('click', () => showAuthForm('register'));
+auth.loginTab.addEventListener('click', () => showAuthForm('login'));
+auth.registerForm.addEventListener('submit', registerAccount);
+auth.loginForm.addEventListener('submit', loginAccount);
+auth.ownerChallengeForm.addEventListener('submit', answerOwnerChallenge);
+ui.logout.addEventListener('click', logoutAccount);
+ownerUi.toggle.addEventListener('click', () => toggleOwnerPanel());
+ownerUi.addAdmin.addEventListener('click', addAdmin);
+ownerUi.ban.addEventListener('click', () => changeBan(true));
+ownerUi.unban.addEventListener('click', () => changeBan(false));
+ownerUi.giveCoins.addEventListener('click', giveCoins);
+ownerUi.giveWizard.addEventListener('click', giveWizard);
+ui.friendsButton.addEventListener('click', () => { setFriendsTab('friends'); ui.friendsModal.classList.remove('hidden'); ui.inviteMessage.textContent = ''; updateFriends(); });
+ui.friendsTab.addEventListener('click', () => setFriendsTab('friends'));
+ui.requestsTab.addEventListener('click', () => setFriendsTab('requests'));
+ui.suggestionsTab.addEventListener('click', () => setFriendsTab('suggestions'));
+ui.friendsClose.addEventListener('click', () => ui.friendsModal.classList.add('hidden'));
+ui.sendInvite.addEventListener('click', sendFriendInvite);
+ui.suggestionsList.addEventListener('click', event => { const accept = event.target.closest('[data-accept]'); const reject = event.target.closest('[data-reject]'); if (accept) respondToFriendInvite(decodeURIComponent(accept.dataset.accept), true); if (reject) respondToFriendInvite(decodeURIComponent(reject.dataset.reject), false); });
+addEventListener('beforeunload', applyInactivePenalty);
+addEventListener('pagehide', event => { if (!event.persisted) applyInactivePenalty(); });
+ensureOwnerAccount();
+showAuthForm('register');
 // === ARCANNA GLOBAL PATCH: OWNER, FRIENDS, TRADE ===
 // Ten blok możesz wkleić pod całym game.js. Nadpisuje stare funkcje.
 
