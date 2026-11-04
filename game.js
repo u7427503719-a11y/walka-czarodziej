@@ -27,7 +27,7 @@ ownerUi.password = document.getElementById('ownerPassword');
 ownerUi.verifyPassword = document.getElementById('verifyOwnerPasswordButton');
 ownerUi.grantOctober = document.getElementById('grantOctoberButton');
 let ownerPasswordVerified = false, verifiedOwnerPassword = '';
-const profileUi = { button: document.getElementById('profileButton'), avatar: document.getElementById('profileAvatar'), modal: document.getElementById('profileModal'), close: document.getElementById('profileClose'), name: document.getElementById('profileName'), editor: document.getElementById('avatarDrawCanvas'), clear: document.getElementById('avatarClear'), save: document.getElementById('avatarSave'), dropEnabled: document.getElementById('dropEnabled'), dropCharm: document.getElementById('dropKeychain'), title: document.getElementById('titleSelect'), showNick: document.getElementById('showNickChange'), showPassword: document.getElementById('showPasswordChange'), nickForm: document.getElementById('nickChangeForm'), passwordForm: document.getElementById('passwordChangeForm') };
+const profileUi = { button: document.getElementById('profileButton'), avatar: document.getElementById('profileAvatar'), modal: document.getElementById('profileModal'), close: document.getElementById('profileClose'), name: document.getElementById('profileName'), settingsButton: document.getElementById('profileSettingsButton'), settings: document.getElementById('profileSettings'), language: document.getElementById('languageSelect'), languageFlag: document.getElementById('languageFlag'), rejectFriendRequests: document.getElementById('rejectFriendRequests'), theme: document.getElementById('themeSelect'), editor: document.getElementById('avatarDrawCanvas'), clear: document.getElementById('avatarClear'), save: document.getElementById('avatarSave'), dropEnabled: document.getElementById('dropEnabled'), dropCharm: document.getElementById('dropKeychain'), title: document.getElementById('titleSelect'), showNick: document.getElementById('showNickChange'), showPassword: document.getElementById('showPasswordChange'), nickForm: document.getElementById('nickChangeForm'), passwordForm: document.getElementById('passwordChangeForm') };
 const accountUi = { list: document.getElementById('profileAccountList'), details: document.getElementById('accountDetails'), name: document.getElementById('accountStatsName'), coins: document.getElementById('accountStatsCoins'), characters: document.getElementById('accountCharacters'), delete: document.getElementById('deleteAccountButton'), confirm: document.getElementById('confirmDeleteModal'), confirmYes: document.getElementById('confirmDeleteYes'), confirmNo: document.getElementById('confirmDeleteNo') };
 const newsUi = { button: document.getElementById('newsButton'), modal: document.getElementById('newsModal'), close: document.getElementById('newsClose'), lists: { new: document.getElementById('newNewsList'), changed: document.getElementById('changedNewsList'), removed: document.getElementById('removedNewsList') }, music: document.getElementById('musicButton') };
 const careerUi = { dailyButton: document.getElementById('dailyMissionButton'), dailyBadge: document.getElementById('dailyMissionBadge'), dailyProgress: document.getElementById('dailyMissionProgress'), boxCount: document.getElementById('dailyBoxCount'), boxButton: document.getElementById('dailyBoxOpenButton'), chestModal: document.getElementById('chestModal'), chestResult: document.getElementById('chestResult'), leaderboardButton: document.getElementById('leaderboardButton'), leaderboardModal: document.getElementById('leaderboardModal'), leaderboardClose: document.getElementById('leaderboardClose'), leaderboardTitle: document.getElementById('leaderboardTitle'), leaderboardList: document.getElementById('leaderboardList'), leaderboardStatus: document.getElementById('leaderboardStatus') };
@@ -60,7 +60,7 @@ const progressMapNames = [
   'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
   'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
   'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
-  'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
+  'arcanaFriendRequests', 'arcanaRejectFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
 ];
 function findLocalAccountEntryByNick(nick) {
   const normalized = String(nick || '').trim().toLowerCase();
@@ -302,16 +302,19 @@ function drawAvatar(canvas, data, nick) {
   image.onload = () => context.drawImage(image, 0, 0, width, height);
   image.src = data;
 }
-function updateProfile() { if (!currentUser) return; const key = currentUser.toLowerCase(); const equipped = getEquippedKeychains(); const dropMap = getMap('arcanaDropCharm'); const previous = dropMap[key]; profileUi.dropCharm.innerHTML = equipped.length ? equipped.map(id => `<option value="${id}">${keychains[id].name}</option>`).join('') : '<option value="">BRAK ZAŁOŻONYCH BRELOCZKÓW</option>'; profileUi.dropCharm.disabled = equipped.length === 0; profileUi.dropCharm.value = equipped.includes(previous) ? previous : (equipped[0] || ''); if (equipped.length && !equipped.includes(previous)) { dropMap[key] = equipped[0]; saveMap('arcanaDropCharm', dropMap); } profileUi.dropEnabled.checked = Boolean(getMap('arcanaDropEnabled')[key]); profileUi.dropEnabled.disabled = equipped.length === 0; updateTitleChoices(); }
+function updateProfile() { if (!currentUser) return; const key = currentUser.toLowerCase(); const equipped = getEquippedKeychains(); const dropMap = getMap('arcanaDropCharm'); const previous = dropMap[key]; profileUi.dropCharm.innerHTML = equipped.length ? equipped.map(id => `<option value="${id}">${keychains[id].name}</option>`).join('') : '<option value="">BRAK ZAŁOŻONYCH BRELOCZKÓW</option>'; profileUi.dropCharm.disabled = equipped.length === 0; profileUi.dropCharm.value = equipped.includes(previous) ? previous : (equipped[0] || ''); if (equipped.length && !equipped.includes(previous)) { dropMap[key] = equipped[0]; saveMap('arcanaDropCharm', dropMap); } profileUi.dropEnabled.checked = Boolean(getMap('arcanaDropEnabled')[key]); profileUi.dropEnabled.disabled = equipped.length === 0; profileUi.rejectFriendRequests.checked = Boolean(getMap('arcanaRejectFriendRequests')[key]); updateTitleChoices(); }
+function applyGameTheme(theme) { const selectedTheme = theme === 'light' ? 'light' : 'dark'; document.body.dataset.theme = selectedTheme; profileUi.theme.value = selectedTheme; localStorage.setItem('arcanaTheme', selectedTheme); }
+function updateLanguageSelection(language) { const option = Array.from(profileUi.language.options).find(item => item.value === language) || profileUi.language.options[0]; profileUi.language.value = option.value; profileUi.languageFlag.textContent = option.textContent.trim().split(' ')[0]; document.documentElement.lang = option.value; localStorage.setItem('arcanaLanguage', option.value); }
+function saveFriendRequestPrivacy(rejectRequests) { const key = currentUser.toLowerCase(); const settings = getMap('arcanaRejectFriendRequests'); settings[key] = rejectRequests; saveMap('arcanaRejectFriendRequests', settings); if (window.connectMatchSocket && window.sendNetwork) connectMatchSocket(() => sendNetwork({ type: 'friend-privacy', rejectRequests })); }
 function openProfile() { const key = currentUser.toLowerCase(); profileUi.name.textContent = getAccounts()[key]?.nick || currentUser; profileUi.modal.classList.remove('hidden'); updateProfile(); updateAccountDirectory(); const avatar = getMap('arcanaAvatars')[key] || ''; drawAvatar(profileUi.avatar, avatar, currentUser); drawAvatar(profileUi.editor, avatar, currentUser); }
 function recordWizardWin() { if (matchWinRecorded || !currentUser) return; matchWinRecorded = true; const key = currentUser.toLowerCase(); const wins = getMap('arcanaWizardWins'); wins[key] ||= {}; const previous = Number(wins[key][selectedWizard] || 0); wins[key][selectedWizard] = previous + 1; saveMap('arcanaWizardWins', wins); if (previous < 500 && wins[key][selectedWizard] >= 500) setToast(`TYTUŁ ODBLOKOWANY: ${wizardTitles[selectedWizard]}`); updateTitleChoices(); connectMatchSocket(() => sendNetwork({ type: 'career-win' })); }
-function moveAccountData(oldNick, newNick) { const oldKey = oldNick.toLowerCase(); const newKey = newNick.toLowerCase(); const accounts = getAccounts(); const account = accounts[oldKey] || {}; delete accounts[oldKey]; account.nick = newNick; accounts[newKey] = account; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels', 'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaSkins', 'arcanaEquippedSkin'].forEach(name => { const map = getMap(name); if (Object.hasOwn(map, oldKey)) { map[newKey] = map[oldKey]; delete map[oldKey]; saveMap(name, map); } }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); if (map[oldKey]) { map[newKey] = map[oldKey]; delete map[oldKey]; } Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).map(nick => nick.toLowerCase() === oldKey ? newNick : nick); }); saveMap(name, map); }); }
+function moveAccountData(oldNick, newNick) { const oldKey = oldNick.toLowerCase(); const newKey = newNick.toLowerCase(); const accounts = getAccounts(); const account = accounts[oldKey] || {}; delete accounts[oldKey]; account.nick = newNick; accounts[newKey] = account; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaRejectFriendRequests', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels', 'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaSkins', 'arcanaEquippedSkin'].forEach(name => { const map = getMap(name); if (Object.hasOwn(map, oldKey)) { map[newKey] = map[oldKey]; delete map[oldKey]; saveMap(name, map); } }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); if (map[oldKey]) { map[newKey] = map[oldKey]; delete map[oldKey]; } Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).map(nick => nick.toLowerCase() === oldKey ? newNick : nick); }); saveMap(name, map); }); }
 async function changeAccountNick(event) { event.preventDefault(); const oldNick = document.getElementById('changeNickCurrent').value.trim(); const newNick = document.getElementById('changeNickNew').value.trim(); const message = document.getElementById('nickChangeMessage'); message.textContent = ''; if (onlineMatch || running) { message.textContent = 'ZAKOŃCZ MECZ PRZED ZMIANĄ NICKU'; return; } if (oldNick.toLowerCase() !== currentUser.toLowerCase()) { message.textContent = 'WPISZ SWÓJ OBECNY NICK'; return; } try { const remote = await authRequest('change-nick', { currentNick: currentUser, currentPassword: document.getElementById('changeNickPassword').value, newNick }); moveAccountData(currentUser, remote.nick); currentUser = remote.nick; localStorage.setItem('arcanaCurrentUser', currentUser); ui.playerName.textContent = `GRACZ: ${currentUser}`; profileUi.name.textContent = currentUser; document.getElementById('changeNickCurrent').value = ''; document.getElementById('changeNickPassword').value = ''; document.getElementById('changeNickNew').value = ''; updateFriends(); updateAccountDirectory(); if (matchSocket) { matchSocket.close(); matchSocket = null; } message.textContent = 'NICK ZMIENIONY'; } catch (error) { message.textContent = error.message; } }
 async function changeAccountPassword(event) { event.preventDefault(); const message = document.getElementById('passwordChangeMessage'); message.textContent = ''; const newPassword = document.getElementById('changePasswordNew').value; if (newPassword !== document.getElementById('changePasswordRepeat').value) { message.textContent = 'NOWE HASŁA NIE SĄ TAKIE SAME'; return; } try { const result = await authRequest('change-password', { currentNick: currentUser, currentPassword: document.getElementById('changePasswordCurrent').value, newPassword, confirmPassword: document.getElementById('changePasswordRepeat').value }); sessionPassword = newPassword; sessionToken = result.sessionToken; const accounts = getAccounts(); accounts[currentUser.toLowerCase()].serverSynced = true; delete accounts[currentUser.toLowerCase()].password; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); profileUi.passwordForm.reset(); message.textContent = 'HASŁO ZMIENIONE'; } catch (error) { message.textContent = error.message; } }
 function updateAccountDirectory() { const accounts = getAccounts(); const entries = Object.entries(accounts).filter(([key, account]) => account?.nick && key !== SUPER_OWNER_NICK).sort((left, right) => left[1].nick.localeCompare(right[1].nick)); accountUi.list.innerHTML = entries.map(([key, account]) => `<button type="button" data-account-view="${encodeURIComponent(key)}">${escapeHtml(account.nick)}</button>`).join('') || '<span class="friends-empty">BRAK KONT</span>'; }
 function showAccountDetails(key) { const account = getAccounts()[key]; if (!account) return; const balances = getMap('arcanaBalances'); const coinsForAccount = Number(balances[key] ?? account.coins ?? 0); const owned = Array.from(new Set(['apprentice', ...(account.wizards || []), ...(getMap('arcanaOwned')[key] || [])])); accountUi.name.textContent = account.nick; accountUi.coins.textContent = `MONETY: ${coinsForAccount}`; accountUi.characters.textContent = `POSTACIE: ${owned.map(id => wizards[id]?.name || id).join(', ')}`; accountUi.delete.disabled = OWNER_NICKS.includes(key); accountPendingDelete = key; accountUi.details.classList.remove('hidden'); }
 function requestAccountDelete() { if (!accountPendingDelete || OWNER_NICKS.includes(accountPendingDelete)) return; accountUi.confirm.classList.remove('hidden'); }
-function deleteAccountConfirmed() { const key = accountPendingDelete; const accounts = getAccounts(); if (!key || OWNER_NICKS.includes(key) || !accounts[key]) { accountUi.confirm.classList.add('hidden'); return; } const nick = accounts[key].nick; delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'].forEach(name => { const map = getMap(name); delete map[key]; saveMap(name, map); }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); delete map[key]; Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).filter(friend => friend.toLowerCase() !== key); }); saveMap(name, map); }); accountUi.confirm.classList.add('hidden'); accountUi.details.classList.add('hidden'); accountPendingDelete = ''; updateAccountDirectory(); if (key === currentUser.toLowerCase()) logoutAccount(); else setToast(`USUNIĘTO KONTO ${nick}`); }
+function deleteAccountConfirmed() { const key = accountPendingDelete; const accounts = getAccounts(); if (!key || OWNER_NICKS.includes(key) || !accounts[key]) { accountUi.confirm.classList.add('hidden'); return; } const nick = accounts[key].nick; delete accounts[key]; localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); ['arcanaBans', 'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains', 'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaRejectFriendRequests', 'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'].forEach(name => { const map = getMap(name); delete map[key]; saveMap(name, map); }); ['arcanaFriends', 'arcanaFriendRequests'].forEach(name => { const map = getMap(name); delete map[key]; Object.keys(map).forEach(owner => { map[owner] = (map[owner] || []).filter(friend => friend.toLowerCase() !== key); }); saveMap(name, map); }); accountUi.confirm.classList.add('hidden'); accountUi.details.classList.add('hidden'); accountPendingDelete = ''; updateAccountDirectory(); if (key === currentUser.toLowerCase()) logoutAccount(); else setToast(`USUNIĘTO KONTO ${nick}`); }
 function clearNewProgress(key) { [['arcanaHats', []], ['arcanaHatLevels', {}], ['arcanaEquippedHat', ''], ['arcanaWizardWins', {}], ['arcanaSelectedTitle', ''], ['arcanaPlayerData', {}], ['arcanaSkins', []], ['arcanaEquippedSkin', '']].forEach(([name, empty]) => { const map = getMap(name); map[key] = empty; saveMap(name, map); }); }
 const originalDeleteAccountConfirmed = deleteAccountConfirmed;
 deleteAccountConfirmed = function () { const key = accountPendingDelete; if (key && !OWNER_NICKS.includes(key) && getAccounts()[key]) clearNewProgress(key); originalDeleteAccountConfirmed(); };
@@ -329,7 +332,7 @@ function clearAuthForm() {
   auth.loginError.textContent = '';
 }
 
-function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', account?.role !== 'owner'); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); updateRestrictedOwnerTools(); if (account?.role === 'owner') toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(); }
+function finishAuth(nick) { currentUser = nick; if (!window.playerData) window.playerData = {}; const key = nick.toLowerCase(); window.playerData[nick] = getMap('arcanaPlayerData')[key] || window.playerData[nick] || {}; logoutIntentional = false; const accounts = getAccounts(); const account = accounts[key]; const balances = getMap('arcanaBalances'); const selectedByAccount = getMap('arcanaSelectedWizards'); coins = Number(balances[key] ?? account?.coins ?? 0); selectedWizard = selectedByAccount[key] || 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); migrateOldPassCharacters(); ui.playerName.textContent = `GRACZ: ${nick}`; profileUi.button.classList.remove('hidden'); ui.logout.classList.remove('hidden'); localStorage.setItem('arcanaCurrentUser', nick); syncAccountRoleUi(); ownerUi.panel.classList.toggle('hidden', account?.role !== 'owner'); ownerUi.addAdmin.classList.toggle('hidden', !isOwner()); ownerUi.resetAccount.classList.toggle('hidden', !isOwner()); ownerUi.resetRanking.classList.toggle('hidden', !isOwner()); updateRestrictedOwnerTools(); if (account?.role === 'owner') toggleOwnerPanel(false); auth.screen.classList.add('hidden'); document.getElementById('deviceScreen').classList.remove('hidden'); updateBackpack(); updateShop(); window.updatePassShop?.(); updateFriends(); updateProfile(); updateAccountDirectory(); drawAvatar(profileUi.avatar, getMap('arcanaAvatars')[key] || '', nick); updateOrientationPrompt(); connectMatchSocket(() => sendNetwork({ type: 'friend-privacy', rejectRequests: Boolean(getMap('arcanaRejectFriendRequests')[key]) })); }
 
 function logoutAccount() {
   if (!currentUser) return;
@@ -422,7 +425,7 @@ function showAuthForm(form) { const register = form === 'register'; auth.registe
 function clearLocalAccountProgress(key) {
   [
     'arcanaBalances', 'arcanaOwned', 'arcanaSelectedWizards', 'arcanaKeychains',
-    'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
+    'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm', 'arcanaRejectFriendRequests',
     'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
     'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
     'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
@@ -465,7 +468,12 @@ function updateRestrictedOwnerTools() {
     overlordOption.hidden = restricted;
     overlordOption.disabled = restricted;
   }
-  if (restricted && ownerUi.wizard.value === 'overlord') ownerUi.wizard.value = 'storm';
+  const napoleonOption = ownerUi.wizard.querySelector('option[value="napoleon"]');
+  if (napoleonOption) {
+    napoleonOption.hidden = restricted;
+    napoleonOption.disabled = restricted;
+  }
+  if (restricted && ['overlord', 'napoleon'].includes(ownerUi.wizard.value)) ownerUi.wizard.value = 'storm';
 }
 function canUseRestrictedOwnerTools() { return isOwner() && !hasRestrictedOwnerTools(); }
 function isStaff() { const account = getAccounts()[currentUser.toLowerCase()]; return account?.role === 'owner' || account?.role === 'admin'; }
@@ -491,10 +499,48 @@ function addAdmin() { if (!isOwner()) return; const nick = ownerUi.target.value.
 async function changeBan(banned) { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } const password = isOwner() ? (ownerPasswordVerified ? verifiedOwnerPassword : '') : sessionPassword; if (!password) { ownerResult(isOwner() ? 'NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA' : 'ZALOGUJ SIĘ PONOWNIE'); return; } try { const result = await ownerRequest('set-ban', { ownerNick: currentUser, password, targetNick: nick, banned }); ownerResult(banned ? `GRACZ ZABANOWANY: ${result.account.nick}` : `GRACZ ODBANOWANY: ${result.account.nick}`); } catch (error) { ownerResult(error.message); } }
 async function giveCoins() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const amount = Number(ownerUi.coins.value); if (!Number.isFinite(amount) || amount < 1) { ownerResult('PODAJ PRAWIDŁOWĄ LICZBĘ MONET'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const added = Math.floor(amount); const balances = getMap('arcanaBalances'); balances[key] = Number(balances[key] || account.coins || 0) + added; accounts[key].coins = balances[key]; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = balances[key]; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`DODANO ${added} MONET GRACZOWI ${account.nick}`); } catch (error) { ownerResult(error.message); } }
 async function takeCoins() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const amount = Number(ownerUi.coins.value); if (!Number.isFinite(amount) || amount < 1) { ownerResult('PODAJ PRAWIDŁOWĄ LICZBĘ MONET'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const balances = getMap('arcanaBalances'); const remaining = Math.max(0, Number(balances[key] ?? account.coins ?? 0) - Math.floor(amount)); balances[key] = remaining; accounts[key].coins = remaining; saveMap('arcanaBalances', balances); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = remaining; localStorage.setItem('arcanaCoins', String(coins)); updateShop(); } ownerResult(`ODJĘTO MONETY GRACZOWI ${account.nick} // STAN ${remaining}`); } catch (error) { ownerResult(error.message); } }
-function resetAccount() { if (!isOwner()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || OWNER_NICKS.includes(key)) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } const balances = getMap('arcanaBalances'); const owned = getMap('arcanaOwned'); const selected = getMap('arcanaSelectedWizards'); balances[key] = 0; owned[key] = []; selected[key] = 'apprentice'; accounts[key].coins = 0; accounts[key].wizards = []; const emptyValues = { arcanaKeychains: [], arcanaEquipped: [], arcanaKeychainLevels: {}, arcanaDropEnabled: false, arcanaDropCharm: '' }; Object.entries(emptyValues).forEach(([mapName, emptyValue]) => { const data = getMap(mapName); data[key] = emptyValue; saveMap(mapName, data); }); saveMap('arcanaBalances', balances); saveMap('arcanaOwned', owned); saveMap('arcanaSelectedWizards', selected); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = 0; selectedWizard = 'apprentice'; localStorage.setItem('arcanaCoins', '0'); localStorage.setItem('arcanaWizard', selectedWizard); updateShop(); updateBackpack(); updateProfile(); } ownerResult(`ZEROWANO KONTO ${accounts[key].nick} // ZOSTAŁA PODSTAWOWA POSTAĆ`); }
+function resetAccount() { if (!isOwner()) return; const key = ownerTarget(); const accounts = getAccounts(); if (!accounts[key] || OWNER_NICKS.includes(key)) { ownerResult('NIEPRAWIDŁOWY CEL'); return; } const balances = getMap('arcanaBalances'); const owned = getMap('arcanaOwned'); const selected = getMap('arcanaSelectedWizards'); balances[key] = 0; owned[key] = []; selected[key] = 'apprentice'; accounts[key].coins = 0; accounts[key].wizards = []; const emptyValues = { arcanaKeychains: [], arcanaEquipped: [], arcanaKeychainLevels: {}, arcanaDropEnabled: false, arcanaDropCharm: '', arcanaRejectFriendRequests: false }; Object.entries(emptyValues).forEach(([mapName, emptyValue]) => { const data = getMap(mapName); data[key] = emptyValue; saveMap(mapName, data); }); saveMap('arcanaBalances', balances); saveMap('arcanaOwned', owned); saveMap('arcanaSelectedWizards', selected); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) { coins = 0; selectedWizard = 'apprentice'; localStorage.setItem('arcanaCoins', '0'); localStorage.setItem('arcanaWizard', selectedWizard); updateShop(); updateBackpack(); updateProfile(); } ownerResult(`ZEROWANO KONTO ${accounts[key].nick} // ZOSTAŁA PODSTAWOWA POSTAĆ`); }
 const originalResetAccount = resetAccount;
 resetAccount = async function () { if (!isOwner()) return; const nick = ownerUi.target.value.trim(); if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } try { const { key } = await cacheCheckedAccount(nick); if (OWNER_NICKS.includes(key)) { ownerResult('NIE MOŻNA ZEROWAĆ KONTA WŁAŚCICIELA'); return; } originalResetAccount(); clearNewProgress(key); } catch (error) { ownerResult(error.message); } };
-async function giveWizard() { if (!isStaff()) return; const nick = ownerUi.target.value.trim(); const id = ownerUi.wizard.value; if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; } if (id === 'overlord' && (!isOwner() || hasRestrictedOwnerTools())) { ownerResult('NADAWANIE WŁADCY JEST NIEDOSTĘPNE'); return; } try { const { account, key, accounts } = await cacheCheckedAccount(nick); const owned = getMap('arcanaOwned'); owned[key] = Array.from(new Set([...(owned[key] || account.wizards || []), id])); accounts[key].wizards = owned[key]; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); if (key === currentUser.toLowerCase()) updateShop(); ownerResult(`${wizards[id].name} DANY GRACZOWI ${account.nick}`); } catch (error) { ownerResult(error.message); } }
+async function giveWizard() {
+  if (!isStaff()) return;
+  const nick = ownerUi.target.value.trim();
+  const id = ownerUi.wizard.value;
+  if (!nick) { ownerResult('PODAJ NICK GRACZA'); return; }
+  if (id === 'overlord' && (!isOwner() || hasRestrictedOwnerTools())) { ownerResult('NADAWANIE WŁADCY JEST NIEDOSTĘPNE'); return; }
+  if (id === 'napoleon') {
+    if (!canUseRestrictedOwnerTools()) { ownerResult('NADAWANIE NAPOLEONA JEST DOSTĘPNE TYLKO DLA WŁAŚCICIELA'); return; }
+    if (!ownerPasswordVerified || !verifiedOwnerPassword) { ownerResult('NAJPIERW POTWIERDŹ HASŁO WŁAŚCICIELA'); return; }
+    try {
+      const { account } = await ownerRequest('grant-wizard', {
+        ownerNick: currentUser,
+        password: verifiedOwnerPassword,
+        targetNick: nick,
+        wizardId: id
+      });
+      const key = account.nick.toLowerCase();
+      const accounts = getAccounts();
+      accounts[key] = { ...(accounts[key] || {}), ...account, serverSynced: true };
+      localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
+      const owned = getMap('arcanaOwned');
+      owned[key] = Array.from(new Set([...(owned[key] || []), id]));
+      saveMap('arcanaOwned', owned);
+      if (key === currentUser.toLowerCase()) updateShop();
+      ownerResult(`NAPOLEON NADANY GRACZOWI ${account.nick}`);
+    } catch (error) { ownerResult(error.message); }
+    return;
+  }
+  try {
+    const { account, key, accounts } = await cacheCheckedAccount(nick);
+    const owned = getMap('arcanaOwned');
+    owned[key] = Array.from(new Set([...(owned[key] || account.wizards || []), id]));
+    accounts[key].wizards = owned[key];
+    saveMap('arcanaOwned', owned);
+    localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
+    if (key === currentUser.toLowerCase()) updateShop();
+    ownerResult(`${wizards[id].name} DANY GRACZOWI ${account.nick}`);
+  } catch (error) { ownerResult(error.message); }
+}
 const ui = { start: document.getElementById('startScreen'), reveal: document.getElementById('revealScreen'), revealName: document.getElementById('revealName'), revealPower: document.getElementById('revealPower'), revealMage: document.getElementById('revealMage'), playerName: document.getElementById('playerName'), logout: document.getElementById('logoutButton'), friendsButton: document.getElementById('friendsButton'), friendsModal: document.getElementById('friendsModal'), friendsClose: document.getElementById('friendsClose'), friendsTab: document.getElementById('friendsTab'), suggestionsTab: document.getElementById('suggestionsTab'), requestsTab: document.getElementById('requestsTab'), friendsView: document.getElementById('friendsView'), suggestionsView: document.getElementById('suggestionsView'), requestsView: document.getElementById('requestsView'), suggestionsList: document.getElementById('suggestionsList'), inviteNick: document.getElementById('inviteNick'), sendInvite: document.getElementById('sendInviteButton'), inviteMessage: document.getElementById('inviteMessage'), friendNick: document.getElementById('friendNick'), addFriend: document.getElementById('addFriendButton'), friendMessage: document.getElementById('friendMessage'), friendsList: document.getElementById('friendsList'), shopButton: document.getElementById('shopButton'), ownedButton: document.getElementById('ownedButton'), shopClose: document.getElementById('shopClose'), detail: document.getElementById('wizardDetail'), wizardName: document.getElementById('wizardName'), wizardPower: document.getElementById('wizardPower'), buy: document.getElementById('buyButton'), use: document.getElementById('useButton'), join: document.getElementById('joinNote'), result: document.getElementById('resultMessage'), coins: document.getElementById('coinsText'), shop: document.getElementById('shop'), score: document.getElementById('scoreText'), mana: document.getElementById('speedText'), manaMeter: document.getElementById('speedMeter'), ward: document.getElementById('altitudeText'), wardMeter: document.getElementById('altitudeMeter'), enemies: document.getElementById('enemiesText'), radar: document.getElementById('radar'), ammo: document.getElementById('ammoRow'), toast: document.getElementById('toast'), status: document.getElementById('statusText'), event: document.getElementById('eventText'), rival: document.getElementById('rivalName') };
 const gameOverScreen = document.getElementById('gameOverScreen');
 const gameOverTitle = document.getElementById('gameOverTitle');
@@ -525,7 +571,9 @@ function returnToLobby() {
 }
 
 const wizards = { apprentice: { name: 'ISKRA', cost: 0, hp: 100, damage: 12, cooldown: .3 }, storm: { name: 'BURZOWY', cost: 180, hp: 90, damage: 10, cooldown: .18 }, electric: { name: 'ELEKTRYCZNY', cost: 25000, hp: 105, damage: 15, cooldown: .25, abilityType: 'lightning', abilityDamage: .55, abilityCooldown: 8, electricDamage: true }, guardian: { name: 'STRAŻNIK', cost: 260, hp: 140, damage: 16, cooldown: .38 }, healer: { name: 'UZDROWICIEL', cost: 3000, hp: 110, damage: 11, cooldown: .3, heal: 10, abilityCooldown: 15 }, cloner: { name: 'KLONER', cost: 4000, hp: 100, damage: 12, cooldown: .3, maxClones: 3 }, aegis: { name: 'AEGIS', cost: 3000, hp: 120, damage: 15, cooldown: .3, shield:  true }, knight: { name: 'RYCERZ', cost: 3500, hp: 120, damage: 2, cooldown: .3, abilityType: 'sword', abilityDamage: .4, abilityCooldown: 5 }, hercules: { name: 'HERKULES', cost: 10000, hp: 160, damage: 0, cooldown: .3, abilityType: 'stone', abilityDamage: .7, abilityCooldown: 4 }, sprinter: { name: 'SPRINTER', cost: 2000, hp: 100, damage: 12, cooldown: .3, speed: 1.7 }, shieldbearer: { name: 'TARCZOWNIK', cost: 5000, hp: 140, damage: 10, cooldown: .3, reflect: true, abilityCooldown: 10 }, thunder: { name: 'PIORUN', cost: 7500, hp: 110, damage: 12, cooldown: .3, abilityType: 'lightning', abilityDamage: .5, abilityCooldown: 8 }, illusionist: { name: 'ILUZJONISTA', cost: 6000, hp: 100, damage: 20, cooldown: .3, abilityType: 'illusion', abilityCooldown: 20, invisibilityDuration: 10, secondaryAbilityType: 'teleport', secondaryAbilityCooldown: 12 }, frostwarden: { name: 'LODOWY WÓDZ', cost: 6200, hp: 138, damage: 18, cooldown: .3, abilityType: 'frost', abilityDamage: .45, abilityCooldown: 8, freezeDuration: 2 }, cosmicobserver: { name: 'KOSMICZNY OBSERWATOR', cost: 7200, hp: 102, damage: 16, cooldown: .3, speed: 1.5, abilityType: 'blink', abilityDamage: .35, abilityCooldown: 10 }, demonwanderer: { name: 'DEMONICZNY WĘDROWIEC', cost: 9000, hp: 118, damage: 20, cooldown: .3, abilityType: 'demonic-rush', abilityDamage: .8, abilityCooldown: 10 }, sanctifier: { name: 'ŚWIĄTY LECZYCIEL', cost: 8200, hp: 110, damage: 6, cooldown: .3, healAlly: true, healAmount: 18, abilityType: 'healing-bolt', abilityCooldown: 12 }, eaglelord: { name: 'WŁADCA ORŁÓW', cost: 250000, hp: 145, damage: 18, cooldown: .28, speed: 1.3, abilityType: 'eagle-strike', abilityDamage: .3, abilityCooldown: 9, secondaryAbilityType: 'eagle-heal', secondaryAbilityCooldown: 12 },
+ napoleon: { name: 'NAPOLEON', cost: 999999999, hp: 130, damage: 14, cooldown: .5, shield: true, ownerOnly: true, grantOnly: true, secondaryAbilityType: 'sword-strike', secondaryAbilityCooldown: 8, secondaryAbilityDamage: .6, secondaryRange: 240 },
  october: { name: 'PAŹDZIERNIK', cost: 999999999, hp: 110, damage: 12, cooldown: .3, abilityType: 'leaf-gust', abilityCooldown: 14, ownerOnly: true, hidden: true }, overlord: { name: 'WŁADCA', cost: 999999999, hp: 1000, damage: 1000, cooldown: .3, shield: true, fullShield: true, invisibility: true, ownerOnly: true } };const wizardTitles = { apprentice: 'Uczeń Iskry', storm: 'Władca Burzy', electric: 'Władca Błyskawic', guardian: 'Strażnik Kręgu', healer: 'Ostatnia Nadzieja', cloner: 'Mistrz Odbić', aegis: 'Niezłomna Tarcza', knight: 'Rycerz Areny', hercules: 'Pięść Herkulesa', sprinter: 'Błyskawiczny', shieldbearer: 'Mistrz Odbić', thunder: 'Głos Gromu', illusionist: 'Mistrz Iluzji', eaglelord: 'Władca Orlich Szczytów', october: 'Strażnik Jesiennych Liści', overlord: 'Władca Areny', frostwarden: 'Lodowy Wódz', cosmicobserver: 'Kosmiczny Obserwator', demonwanderer: 'Demoniczny Wędrowiec', sanctifier: 'Życiodajny Opiekun' };
+ wizardTitles.napoleon = 'Szabla Napoleona';
 const botProfiles = [
   { wizardId: 'apprentice', difficulty: 1, reward: 100 },
   { wizardId: 'storm', difficulty: 2, reward: 160 },
@@ -542,7 +590,7 @@ const playButton = document.getElementById('playButton');
 let selectedGameMode = 'bot', rankedGameActive = false;
 const groupInviteUi = { modal: document.getElementById('groupInviteModal'), text: document.getElementById('groupInviteText'), accept: document.getElementById('acceptGroupInvite'), reject: document.getElementById('rejectGroupInvite'), status: document.getElementById('groupStatus') };
 let matchRoomKey = '';
-let matchSocket = null, onlineMatch = false, lastNetworkSync = 0;
+let matchSocket = null, onlineMatch = false, lastNetworkSync = 0, spectatorMode = false;
 let groupId = '', groupMembers = [], pendingGroupInvite = null, teamId = '', randomQueued = false, queueMatchType = '1v1';
 let coins = Number(localStorage.getItem('arcanaCoins') || 0), selectedWizard = localStorage.getItem('arcanaWizard') || 'apprentice', viewedWizard = 'apprentice';
 let W = 0, H = 0, running = false, last = 0, score = 0, mode = 'bot', joined = false, toastClock = 0, ownedOnly = false, deviceMode = '', joystickPointer = null, gameStartToken = 0, teleportTargeting = false;
@@ -563,7 +611,7 @@ reset = function () { resetForMode(); if (mode === 'preview') { p2.maxHp = 100; 
 function getMatchCode() { return matchCodeInput.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, ''); }
 function sendNetwork(message) { if (matchSocket?.readyState === WebSocket.OPEN) matchSocket.send(JSON.stringify(message)); }
 function recordElimination(target) { if (reportedEliminations.has(target)) return; reportedEliminations.add(target); if (onlineMatch && target.nick) sendNetwork({ type: 'kill', targetNick: target.nick }); else if (mode.startsWith('bot') && target.teamId === 'bot-team' && target.botId) sendNetwork({ type: 'career-bot-kill', targetId: target.botId }); }
-function leaveMatchConnection() { if (matchSocket) { sendNetwork({ type: randomQueued ? 'queue-cancel' : 'leave-room' }); matchSocket.close(); matchSocket = null; } randomQueued = false; onlineMatch = false; joined = false; running = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); updateDeviceControls(); }
+function leaveMatchConnection() { if (matchSocket) { sendNetwork({ type: randomQueued ? 'queue-cancel' : 'leave-room' }); matchSocket.close(); matchSocket = null; } randomQueued = false; onlineMatch = false; joined = false; running = false; spectatorMode = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); updateDeviceControls(); }
 function handleNetworkMessage(message) { if (message.type === 'waiting') { ui.join.textContent = `CZEKANIE NA GRACZA // KOD ${message.code}`; return; } if (message.type === 'matched') { onlineMatch = true; joined = true; opponentProfile = message.opponent || {}; mode = 'player'; matchRewardGranted = false; ui.join.textContent = 'PRZECIWNIK ZNALEZIONY // START'; if (!running) startGame('player'); return; } if (message.type === 'state') { p2.x = (1 - message.x) * W; p2.y = message.y * H; p2.hp = message.hp; p2.maxHp = message.maxHp || 100; p2.mana = message.mana; p2.invisible = message.invisible; p2.damageReduction = message.damageReduction || 0; p2.reflectShield = message.reflectShield || 0; p2.clones = (message.clones || []).map(clone => ({ x: (1 - clone.x) * W, y: clone.y * H, slot: clone.slot })); return; } if (message.type === 'spell') { const spell = message.spell; if (p1.reflectShield > 0) { const angle = Math.atan2(p2.y - p1.y, p2.x - p1.x); const reflected = { ...spell, x: p1.x, y: p1.y, vx: Math.cos(angle) * 520, vy: Math.sin(angle) * 520, life: 1.5, owner: p1 }; spells.push(reflected); sendNetwork({ type: 'reflect', id: spell.id, reflector: currentUser, spell: { ...reflected, x: reflected.x / W, y: reflected.y / H, vx: reflected.vx / W, vy: reflected.vy / H } }); return; } spells.push({ ...spell, x: (1 - spell.x) * W, y: spell.y * H, vx: -spell.vx * W, vy: spell.vy * H, owner: p2 }); return; } if (message.type === 'reflect') { spells.forEach(spell => { if (spell.id === message.id) spell.life = 0; }); const spell = message.spell; spells.push({ ...spell, x: (1 - spell.x) * W, y: spell.y * H, vx: -spell.vx * W, vy: spell.vy * H, owner: message.reflector?.toLowerCase() === currentUser.toLowerCase() ? p1 : p2 }); return; } if (message.type === 'damage') { p1.hp -= message.amount; if (p1.hp <= 0) endGame('GRACZ 2'); return; } if (message.type === 'round-ended') { const won = message.winnerNick?.toLowerCase() === currentUser.toLowerCase(); if (won && !matchRewardGranted && opponentProfile.dropEnabled && keychains[opponentProfile.dropCharm]) { grantKeychain(opponentProfile.dropCharm); matchRewardGranted = true; setToast(`ZDOBYWASZ BRELOCZEK: ${keychains[opponentProfile.dropCharm].name}`); } if (running && !won) { coins = Math.max(0, coins - 50); persistCoins(); ui.result.textContent = 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden'); ui.result.classList.add('loss'); } onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'RUNDA ZAKOŃCZONA // DOŁĄCZ PONOWNIE KODEM'; updateDeviceControls(); if (matchSocket) matchSocket.close(); return; } if (message.type === 'opponent-left') { onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'PRZECIWNIK OPUŚCIŁ GRĘ'; updateDeviceControls(); setToast('PRZECIWNIK OPUŚCIŁ GRĘ'); } }
 function connectMatchSocket(onReady = () => {}) {
   if (matchSocket?.readyState === WebSocket.OPEN) { onReady(); return; }
@@ -596,10 +644,25 @@ function startCodeMatch() { const code = getMatchCode(); if (!code || !currentUs
 function startTeamQueue(matchType) { queueMatchType = matchType; if (randomQueued) { sendNetwork({ type: 'queue-cancel' }); randomQueued = false; } toggleRandomQueue(); }
 function startRankedQueue() { if (!currentUser || onlineMatch) return; if (randomQueued) { setToast('JUŻ SZUKASZ GRACZA'); return; } if (getMap('arcanaMatchBlocked')[currentUser.toLowerCase()]) { setToast('DOPASOWANIE ZABLOKOWANE'); return; } if (groupId && groupMembers[0]?.toLowerCase() !== currentUser.toLowerCase()) { setToast('LIDER GRUPY URUCHAMIA DOPASOWYWANIE'); return; } const partySize = groupId ? groupMembers.length : 1; if (partySize !== 3) { setToast('RANKING 3 NA 3 // ZBIERZ PEŁNĄ DRUŻYNĘ TRZECH GRACZY'); return; } rankedGameActive = true; queueMatchType = '3v3'; randomQueued = true; mode = 'player'; ui.join.textContent = 'RANKING 3 NA 3 // SZUKANIE DRUŻYNY'; connectMatchSocket(() => { if (randomQueued) sendNetwork({ type: 'queue-random', matchType: '3v3', ranked: true, profile: getProfileDrop() }); }); }
 function toggleRandomQueue() { if (!currentUser || onlineMatch) return; if (randomQueued) { randomQueued = false; sendNetwork({ type: 'queue-cancel' }); randomQueueButton.textContent = 'LOSOWA GRA →'; ui.join.textContent = 'ANULOWANO KOLEJKĘ'; return; } if (getMap('arcanaMatchBlocked')[currentUser.toLowerCase()]) { setToast('DOPASOWANIE ZABLOKOWANE'); return; } if (groupId && groupMembers[0]?.toLowerCase() !== currentUser.toLowerCase()) { setToast('LIDER GRUPY URUCHAMIA DOPASOWYWANIE'); return; } randomQueued = true; mode = 'player'; ui.join.textContent = `SZUKANIE MECZU ${queueMatchType.toUpperCase()}...`; connectMatchSocket(() => { if (randomQueued) sendNetwork({ type: 'queue-random', matchType: queueMatchType, profile: getProfileDrop() }); }); randomQueueButton.textContent = 'ANULUJ KOLEJKĘ'; }
-function syncNetworkState() { const now = performance.now(); if (!onlineMatch || now - lastNetworkSync < 50) return; lastNetworkSync = now; sendNetwork({ type: 'state', nick: currentUser, teamId, x: p1.x / W, y: p1.y / H, hp: p1.hp, maxHp: p1.maxHp, mana: p1.mana, invisible: p1.invisible, damageReduction: p1.damageReduction, reflectShield: p1.reflectShield, clones: cloneBodies.map(clone => ({ x: clone.x / W, y: clone.y / H, slot: clone.slot })) }); }
+function syncNetworkState() {
+  const now = performance.now();
+  if (!onlineMatch || now - lastNetworkSync < 50) return;
+  lastNetworkSync = now;
+  const wizard = wizards[selectedWizard];
+  const damageReduction = p1.shield > 0
+    ? 1 - (1 - getDamageReduction()) * (wizard.fullShield ? 0 : .2)
+    : getDamageReduction();
+  sendNetwork({
+    type: 'state', nick: currentUser, teamId, x: p1.x / W, y: p1.y / H,
+    hp: p1.hp, maxHp: p1.maxHp, mana: p1.mana, invisible: p1.invisible,
+    damageReduction, reflectShield: p1.reflectShield,
+    swordSwing: p1.swordSwing, swordAngle: p1.swordAngle,
+    clones: cloneBodies.map(clone => ({ x: clone.x / W, y: clone.y / H, slot: clone.slot }))
+  });
+}
 function startGame(selectedMode) { mode = selectedMode; if (mode === 'player' && !joined) { ui.join.textContent = 'NACISNIJ ENTER, ABY DOLACZYC GRACZEM 2'; return; } if (mode.startsWith('bot')) activeBotProfile = botProfiles[Math.floor(Math.random() * botProfiles.length)]; const startToken = ++gameStartToken; reset(); running = false; ui.result.classList.add('hidden'); ui.start.classList.add('hidden'); const wizard = wizards[selectedWizard]; ui.revealName.textContent = wizard.name; ui.revealMage.textContent = wizard.name.slice(0, 1); ui.revealPower.textContent = wizard.abilityType === 'illusion' ? `NIEWIDZIALNOŚĆ // ${wizard.invisibilityDuration} SEKUND // ODNOWIENIE ${wizard.abilityCooldown} SEKUND` : wizard.abilityType ? `UMIEJĘTNOŚĆ // ${Math.round(wizard.abilityDamage * 100)}% HP // CO ${wizard.abilityCooldown} SEK` : wizard.reflect ? `ODBICIE POCISKÓW // CO ${wizard.abilityCooldown} SEK` : wizard.heal ? `LECZENIE ${wizard.heal} HP // CO ${wizard.abilityCooldown} SEK` : wizard.maxClones ? `MAKSYMALNIE ${wizard.maxClones} KLONÓW` : wizard.shield ? 'TARCZA // REDUKCJA OBRAŻEŃ' : `MOC ZAKLĘCIA // ${wizard.damage} OBRAŻEŃ`; ui.reveal.classList.remove('hidden'); ui.status.textContent = 'PREPARING DUEL'; ui.event.textContent = 'CHOOSE YOUR SPELL'; ui.rival.textContent = mode.startsWith('bot') ? wizards[activeBotProfile.wizardId].name : 'PLAYER 2'; setTimeout(() => { if (startToken !== gameStartToken || !ui.start.classList.contains('hidden')) return; ui.reveal.classList.add('hidden'); running = true; updateDeviceControls(); ui.status.textContent = 'DUEL SYSTEMS ACTIVE'; ui.event.textContent = mode.startsWith('bot') ? 'THE BOT HAS ENTERED THE CIRCLE' : 'TWO MAGES // ONE DESTINY'; }, 1800); }
 const resetWithAbilityState = reset;
-reset = function () { resetWithAbilityState(); p1.secondaryAbilityCooldown = 0; teleportTargeting = false; };
+reset = function () { resetWithAbilityState(); p1.secondaryAbilityCooldown = 0; p1.swordSwing = 0; p1.swordAngle = undefined; teleportTargeting = false; };
 const originalStartGame = startGame;
 startGame = function (selectedMode) { matchWinRecorded = false; originalStartGame(selectedMode); if (ui.reveal.classList.contains('hidden')) return; const rival = mode.startsWith('bot') ? { nick: 'BOT', wizardId: activeBotProfile.wizardId, title: '' } : opponentProfile; document.getElementById('matchPlayerWizard').textContent = wizards[selectedWizard].name; document.getElementById('matchPlayerNick').textContent = currentUser || 'GRACZ'; document.getElementById('matchPlayerTitle').textContent = getCurrentTitle(); document.getElementById('matchRivalWizard').textContent = wizards[rival.wizardId]?.name || 'ISKRA'; document.getElementById('matchRivalNick').textContent = rival.nick || 'PRZECIWNIK'; document.getElementById('matchRivalTitle').textContent = rival.title || ''; };
 const startGameWithPreviewLabel = startGame;
@@ -622,13 +685,36 @@ document.getElementById('testWizardButton').addEventListener('click', () => star
 document.getElementById('previewExitButton').addEventListener('click', exitWizardTest);
 function move(m, dx, dy, dt) { if (m.hp <= 0) return; const speed = m === p1 ? (wizards[selectedWizard].speed || 1) : (m.botSpeed || 1); m.x = Math.max(40, Math.min(W - 40, m.x + dx * 230 * speed * dt)); m.y = Math.max(H * .24, Math.min(H * .82, m.y + dy * 180 * speed * dt)); }
 function getHostileTargets() { return onlineMatch ? [...remotePlayers.values()].filter(player => player.teamId !== teamId) : [p2, ...botPlayers].filter(player => player.teamId === 'bot-team'); }
+function updateSpectatorStatus() {
+  if (!spectatorMode) return;
+  const ally = [...remotePlayers.values()].find(player => player.teamId === teamId && player.hp > 0);
+  ui.status.textContent = ally ? `OBSERWUJESZ: ${ally.nick}` : 'OBSERWUJESZ DRUŻYNĘ';
+  ui.event.textContent = ally ? `SOJUSZNIK // ${Math.ceil(ally.hp)} HP` : 'OCZEKIWANIE NA KONIEC RUNDY';
+}
+function handlePlayerDeath() {
+  const allyAlive = onlineMatch && [...remotePlayers.values()].some(player => player.teamId === teamId && player.hp > 0);
+  if (!allyAlive) { endGame('GRACZ 2'); return; }
+  spectatorMode = true;
+  Object.keys(keys).forEach(key => { keys[key] = false; });
+  resetJoystick();
+  updateDeviceControls();
+  updateSpectatorStatus();
+  syncNetworkState();
+}
 function cast(owner, target, color) {
-  const melee = owner === p1 && selectedWizard === 'hercules';
+  const melee = owner === p1 && ['hercules', 'napoleon'].includes(selectedWizard);
   if (!running || owner.hp <= 0 || target.hp <= 0 || owner === target || owner.cooldown > 0 || owner.stunTimer > 0 || (!melee && owner.mana < 16) || (owner === p1 && p1.damage <= 0 && !melee)) return;
   const angle = Math.atan2(target.y - owner.y, target.x - owner.x);
   if (melee) {
-    if (Math.hypot(target.x - owner.x, target.y - owner.y) > 92) return;
+    if (Math.hypot(target.x - owner.x, target.y - owner.y) > (selectedWizard === 'napoleon' ? 88 : 92)) return;
     owner.cooldown = p1.spellCooldown;
+    if (selectedWizard === 'napoleon') {
+      owner.swordAngle = angle;
+      owner.swordSwing = .24;
+      applySwordDamage(target, p1.damage * getStrengthMultiplier(), '#e9e4d5');
+      setToast('NAPOLEON // CIOS SZABLĄ');
+      return;
+    }
     const damage = 15 * (1 - (target === p2 ? (p2.damageReduction || 0) : getDamageReduction()));
     const targetWasAlive = target.hp > 0;
     target.hp -= damage;
@@ -656,6 +742,16 @@ function cast(owner, target, color) {
   spells.push({ ...spell, owner });
   if (onlineMatch && owner === p1) sendNetwork({ type: 'spell', ownerNick: currentUser, teamId, spell: { ...spell, x: spell.x / W, y: spell.y / H, vx: spell.vx / W, vy: spell.vy / H } });
   burst(owner.x, owner.y, color, 5);
+}
+function applySwordDamage(target, baseDamage, color) {
+  const damage = baseDamage * (1 - (target.damageReduction || 0));
+  const targetWasAlive = target.hp > 0;
+  target.hp -= damage;
+  if (target.nick && remotePlayers.has(target.nick.toLowerCase())) remotePlayers.get(target.nick.toLowerCase()).hp = target.hp;
+  if (onlineMatch && target.nick) sendNetwork({ type: 'damage', targetNick: target.nick, amount: damage, attackerNick: currentUser, swordAngle: p1.swordAngle });
+  if (targetWasAlive && target.hp <= 0) recordElimination(target);
+  burst(target.x, target.y, color, 16);
+  if (target.hp <= 0 && getHostileTargets().every(player => player.hp <= 0)) endGame('GRACZ 1');
 }
 function useAbility() {
   if (!running || p1.hp <= 0 || p1.stunTimer > 0) return;
@@ -716,6 +812,7 @@ function useAbility() {
     if (p1.shieldUsed) return;
     p1.shield = 10;
     p1.shieldUsed = true;
+    syncNetworkState();
     setToast('TARCZA // 80% REDUKCJI // 10 SEKUND');
     return;
   }
@@ -759,6 +856,18 @@ function useAbility() {
 function useSecondaryAbility() {
   if (!running || p1.hp <= 0 || p1.stunTimer > 0) return;
   const wizard = wizards[selectedWizard];
+  if (wizard.secondaryAbilityType === 'sword-strike') {
+    if (p1.secondaryAbilityCooldown > 0) { setToast(`NAPOLEON // CIĘCIE ZA ${Math.ceil(p1.secondaryAbilityCooldown)} SEK`); return; }
+    const target = getHostileTargets().filter(player => player.hp > 0 && Math.hypot(player.x - p1.x, player.y - p1.y) <= wizard.secondaryRange)
+      .sort((left, right) => Math.hypot(left.x - p1.x, left.y - p1.y) - Math.hypot(right.x - p1.x, right.y - p1.y))[0];
+    if (!target) { setToast('NAPOLEON // BRAK PRZECIWNIKA W ZASIĘGU SZABLI'); return; }
+    p1.secondaryAbilityCooldown = wizard.secondaryAbilityCooldown;
+    p1.swordAngle = Math.atan2(target.y - p1.y, target.x - p1.x);
+    p1.swordSwing = .18;
+    applySwordDamage(target, target.maxHp * wizard.secondaryAbilityDamage, '#ffe6a3');
+    setToast('NAPOLEON // SZYBKIE CIĘCIE // 60% HP');
+    return;
+  }
   if (wizard.secondaryAbilityType === 'eagle-heal') {
     if (p1.secondaryAbilityCooldown > 0) { setToast(`WŁADCA ORŁÓW // LECZENIE ZA ${Math.ceil(p1.secondaryAbilityCooldown)} SEK`); return; }
     if (p1.hp >= p1.maxHp) { setToast('WŁADCA ORŁÓW // HP JEST PEŁNE'); return; }
@@ -782,7 +891,7 @@ function applyLeafGust(target, sourceX, sourceY) { const dx = target.x - sourceX
 function tickControlEffects(target, dt) { target.stunTimer = Math.max(0, (target.stunTimer || 0) - dt); if (target.knockbackTimer > 0) { target.x = Math.max(40, Math.min(W - 40, target.x + target.knockbackX * dt)); target.y = Math.max(H * .24, Math.min(H * .82, target.y + target.knockbackY * dt)); target.knockbackTimer = Math.max(0, target.knockbackTimer - dt); } }
 function useShield() { if (!running || !wizards[selectedWizard].fullShield || p1.shieldUsed) return; p1.shield = 10; p1.shieldUsed = true; setToast('WŁADCA // TARCZA 100% // 10 SEKUND'); }
 function teleportToPointer(event) {
-  if (!teleportTargeting || !running || selectedWizard !== 'illusionist') return;
+  if (!teleportTargeting || !running || spectatorMode || p1.hp <= 0 || selectedWizard !== 'illusionist') return;
   const rect = canvas.getBoundingClientRect();
   p1.x = Math.max(40, Math.min(W - 40, (event.clientX - rect.left) * W / rect.width));
   p1.y = Math.max(H * .24, Math.min(H * .82, (event.clientY - rect.top) * H / rect.height));
@@ -811,6 +920,7 @@ function update(dt) {
   p1.cooldown = Math.max(0, p1.cooldown - dt);
   p1.abilityCooldown = Math.max(0, p1.abilityCooldown - dt);
   p1.secondaryAbilityCooldown = Math.max(0, p1.secondaryAbilityCooldown - dt);
+  p1.swordSwing = Math.max(0, (p1.swordSwing || 0) - dt);
   if (p1.invisibleTimer > 0) { p1.invisibleTimer = Math.max(0, p1.invisibleTimer - dt); if (!p1.invisibleTimer) { p1.invisible = false; updateDeviceControls(); } }
   p2.cooldown = Math.max(0, p2.cooldown - dt);
   botPlayers.forEach(player => { player.cooldown = Math.max(0, player.cooldown - dt); player.mana = Math.min(100, player.mana + dt * 8); });
@@ -857,7 +967,7 @@ function update(dt) {
     p1.hp -= spell.damage * (1 - reduction) * shieldFactor;
     if (spell.electricDamage) p1.stunTimer = Math.max(p1.stunTimer || 0, 1.2);
     burst(p1.x, p1.y, spell.color, 12); spell.life = 0;
-    if (p1.hp <= 0) endGame('GRACZ 2');
+    if (p1.hp <= 0) handlePlayerDeath();
   });
   spells = spells.filter(spell => spell.life > 0 && spell.x > -40 && spell.x < W + 40 && spell.y > -40 && spell.y < H + 40);
   particles.forEach(particle => { particle.x += particle.vx * dt; particle.y += particle.vy * dt; particle.life -= dt; });
@@ -915,7 +1025,7 @@ updateFriends = function () { originalUpdateFriends(); ui.friendsList.querySelec
 function setFriendsTab(tab) { const tabs = { friends: [ui.friendsTab, ui.friendsView], suggestions: [ui.suggestionsTab, ui.suggestionsView], requests: [ui.requestsTab, ui.requestsView] }; Object.entries(tabs).forEach(([name, [button, view]]) => { button.classList.toggle('active', name === tab); view.classList.toggle('hidden', name !== tab); }); }
 const originalNetworkMessageHandler = handleNetworkMessageV2;
 handleNetworkMessageV2 = function (message) { if (message.type === 'round-ended' && (message.winnerTeamId ? message.winnerTeamId === teamId : message.winnerNick?.toLowerCase() === currentUser.toLowerCase())) recordWizardWin(); originalNetworkMessageHandler(message); };
-function sendFriendInvite() { const nick = ui.inviteNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); ui.inviteMessage.textContent = ''; if (!accounts[key] || key === SUPER_OWNER_NICK) { ui.inviteMessage.textContent = 'NIE ZNALEZIONO TAKIEGO GRACZA'; return; } if (key === currentUser.toLowerCase()) { ui.inviteMessage.textContent = 'NIE MOŻESZ ZAPROSIĆ SIEBIE'; return; } const friendsMap = getMap('arcanaFriends'); const friends = friendsMap[currentUser.toLowerCase()] || []; if (friends.some(friend => friend.toLowerCase() === key)) { ui.inviteMessage.textContent = 'TEN GRACZ JUŻ JEST ZNAJOMYM'; return; } const requestsMap = getMap('arcanaFriendRequests'); const requests = requestsMap[key] || []; if (requests.some(request => request.toLowerCase() === currentUser.toLowerCase())) { ui.inviteMessage.textContent = 'ZAPROSZENIE JUŻ WYSŁANE'; return; } requests.push(currentUser); requestsMap[key] = requests; saveMap('arcanaFriendRequests', requestsMap); ui.inviteNick.value = ''; ui.inviteMessage.textContent = 'ZAPROSZENIE WYSŁANE'; }
+function sendFriendInvite() { const nick = ui.inviteNick.value.trim(); const key = nick.toLowerCase(); const accounts = getAccounts(); ui.inviteMessage.textContent = ''; if (!accounts[key] || key === SUPER_OWNER_NICK) { ui.inviteMessage.textContent = 'NIE ZNALEZIONO TAKIEGO GRACZA'; return; } if (Boolean(getMap('arcanaRejectFriendRequests')[key])) { ui.inviteMessage.textContent = `${accounts[key].nick} ODRZUCA ZAPROSZENIA DO ZNAJOMYCH`; return; } if (key === currentUser.toLowerCase()) { ui.inviteMessage.textContent = 'NIE MOŻESZ ZAPROSIĆ SIEBIE'; return; } const friendsMap = getMap('arcanaFriends'); const friends = friendsMap[currentUser.toLowerCase()] || []; if (friends.some(friend => friend.toLowerCase() === key)) { ui.inviteMessage.textContent = 'TEN GRACZ JUŻ JEST ZNAJOMYM'; return; } const requestsMap = getMap('arcanaFriendRequests'); const requests = requestsMap[key] || []; if (requests.some(request => request.toLowerCase() === currentUser.toLowerCase())) { ui.inviteMessage.textContent = 'ZAPROSZENIE JUŻ WYSŁANE'; return; } requests.push(currentUser); requestsMap[key] = requests; saveMap('arcanaFriendRequests', requestsMap); ui.inviteNick.value = ''; ui.inviteMessage.textContent = 'ZAPROSZENIE WYSŁANE'; }
 function sendGroupInvite(nick) { connectMatchSocket(() => sendNetwork({ type: 'group-invite', targetNick: nick })); }
 function acceptGroupInvite(accepted) { if (!pendingGroupInvite) return; sendNetwork({ type: accepted ? 'group-accept' : 'group-reject', groupId: pendingGroupInvite.groupId, from: pendingGroupInvite.from }); pendingGroupInvite = null; groupInviteUi.modal.classList.add('hidden'); }
 function respondToFriendInvite(nick, accepted) { connectMatchSocket(() => sendNetwork({ type: 'friend-response', targetNick: nick, accepted })); }
@@ -924,7 +1034,20 @@ function openWizard(id) { viewedWizard = id; const wizard = wizards[id]; const a
 function removeWizard() { selectedWizard = 'apprentice'; localStorage.setItem('arcanaWizard', selectedWizard); const selected = getMap('arcanaSelectedWizards'); selected[currentUser.toLowerCase()] = selectedWizard; saveMap('arcanaSelectedWizards', selected); updateShop(); setToast('CZARODZIEJ ZDJĘTY'); }
 function buyWizard(id) { const wizard = wizards[id]; const owned = getMap('arcanaOwned'); const accounts = getAccounts(); const playerOwned = Array.from(new Set([...(owned[currentUser.toLowerCase()] || []), ...(accounts[currentUser.toLowerCase()]?.wizards || [])])); if (wizard.ownerOnly && !isOwner() && !playerOwned.includes(id)) { setToast('WŁADCĘ MOŻE NADAĆ TYLKO TEST123'); return; } if (playerOwned.includes(id) || wizard.cost === 0) return; if (coins < wizard.cost) { setToast('NIE STAĆ CIĘ'); return; } coins -= wizard.cost; playerOwned.push(id); owned[currentUser.toLowerCase()] = playerOwned; accounts[currentUser.toLowerCase()].wizards = playerOwned; saveMap('arcanaOwned', owned); localStorage.setItem('arcanaAccounts', JSON.stringify(accounts)); persistCoins(); setToast(`${wizard.name} KUPIONY // DODANO DO POSIADANYCH`); updateShop(); openWizard(id); }
 function useWizard(id) { const wizard = wizards[id]; const accounts = getAccounts(); const owned = Array.from(new Set([...(getMap('arcanaOwned')[currentUser.toLowerCase()] || []), ...(accounts[currentUser.toLowerCase()]?.wizards || [])])); if (wizard.cost > 0 && !owned.includes(id)) return; selectedWizard = id; localStorage.setItem('arcanaWizard', selectedWizard); const selected = getMap('arcanaSelectedWizards'); selected[currentUser.toLowerCase()] = id; saveMap('arcanaSelectedWizards', selected); updateShop(); openWizard(id); setToast(`${wizard.name} UŻYWANY`); }
-const updatePreviewLoop = update;
+ const openWizardWithNapoleonDetails = openWizard;
+ openWizard = function (id) {
+   openWizardWithNapoleonDetails(id);
+   if (id === 'napoleon') {
+     ui.wizardPower.textContent = `Atak: cios szablą bez pocisku | E: tarcza redukująca obrażenia o 80% | Q: szybkie cięcie zadające 60% maksymalnego HP | ${wizards.napoleon.hp} HP | ${ui.buy.disabled ? 'POSIADANY' : 'TYLKO NADAWANY PRZEZ WŁAŚCICIELA'}`;
+     if (!ui.buy.disabled) { ui.buy.textContent = 'TYLKO WŁAŚCICIEL'; ui.buy.disabled = true; }
+   }
+ };
+ const buyWizardWithoutGrantOnly = buyWizard;
+ buyWizard = function (id) {
+   if (wizards[id]?.grantOnly) { setToast('NAPOLEONA MOŻE NADAĆ TYLKO WŁAŚCICIEL'); return; }
+   buyWizardWithoutGrantOnly(id);
+ };
+ const updatePreviewLoop = update;
 update = function (dt) { if (mode === 'preview' && running) p2.stunTimer = Infinity; updatePreviewLoop(dt); if (mode === 'preview' && running) p2.stunTimer = Infinity; };
 function updateUI() { const playerHp = Math.max(0, p1.hp / p1.maxHp * 100); const rivalHp = Math.max(0, p2.hp / p2.maxHp * 100); ui.score.textContent = String(score).padStart(6, '0'); ui.mana.textContent = Math.round(p1.mana); ui.manaMeter.style.width = `${p1.mana}%`; ui.ward.textContent = Math.round(playerHp); ui.wardMeter.style.width = `${playerHp}%`; ui.enemies.textContent = `${mode === 'player' ? 'MAGE 2' : 'BOT'} WARD ${Math.round(rivalHp)}%`; ui.radar.innerHTML = `<i class="radar-contact" style="left:${50 + (p2.x - p1.x) / W * 100}%;top:${50 + (p2.y - p1.y) / H * 100}%"></i>`; ui.ammo.innerHTML = Array.from({ length: 6 }, (_, i) => `<i class="ammo ${i >= Math.floor(p1.mana / 16) ? 'empty' : ''}"></i>`).join(''); if (toastClock <= 0) ui.toast.classList.remove('show'); }
 const updateUIWithPreviewBot = updateUI;
@@ -974,6 +1097,7 @@ function drawEagleProjectile(spell) {
 }
 function drawMage(m, label) {
   if (m.invisible) return;
+  const wizardId = m === p1 ? selectedWizard : m.wizardId || (m === p2 ? opponentProfile.wizardId : '');
   const sameTeam = onlineMatch ? m === p1 || m.teamId === teamId : m === p1 || m.teamId === 'player-team';
   const localSkin = mageSkins[getEquippedMageSkin()];
   const characterSkin = mageSkins[m === p1 ? getEquippedMageSkin() : (m.skinId || (m === p2 ? opponentProfile.skinId : ''))];
@@ -1004,9 +1128,34 @@ function drawMage(m, label) {
   const hatId = m === p1 ? getEquippedHat() : (m.hatId || (m === p2 ? opponentProfile.hatId : ''));
   if (hats[hatId]) { ctx.fillStyle = hatId === 'strength-hat' ? '#ffcf67' : hatId === 'guard-hat' ? '#91d8ee' : '#d9d4f1'; ctx.beginPath(); ctx.moveTo(-20, -43); ctx.lineTo(-14, -58); ctx.lineTo(14, -58); ctx.lineTo(20, -43); ctx.closePath(); ctx.fill(); ctx.fillRect(-23, -44, 46, 5); }
   ctx.strokeStyle = appearance.accent; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(m.face * 18, 13); ctx.lineTo(m.face * 42, -18); ctx.stroke();
+  if (wizardId === 'napoleon') {
+    const swordAngle = Number.isFinite(m.swordAngle) ? m.swordAngle : (m.face < 0 ? Math.PI : 0);
+    const swingProgress = m.swordSwing > 0 ? 1 - m.swordSwing / .24 : 0;
+    const swingOffset = m.swordSwing > 0 ? Math.cos(swingProgress * Math.PI) * .9 : 0;
+    ctx.save(); ctx.translate(8, 3); ctx.rotate(swordAngle + swingOffset);
+    ctx.strokeStyle = '#d7bd85'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(-4, 0); ctx.lineTo(9, 0); ctx.stroke();
+    ctx.strokeStyle = '#f4f0e2'; ctx.lineWidth = 3; ctx.beginPath(); ctx.moveTo(9, 0); ctx.quadraticCurveTo(25, -5, 43, -1); ctx.stroke();
+    ctx.strokeStyle = '#fff8d8'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(11, -1); ctx.lineTo(40, -2); ctx.stroke();
+    ctx.restore();
+  }
   ctx.fillStyle = appearance.accent; ctx.font = '700 11px Space Grotesk'; ctx.textAlign = 'center'; ctx.fillText(label, 0, 67); ctx.restore();
 }
-function updateDeviceControls() { const wizard = wizards[selectedWizard]; document.getElementById('touchControls').classList.toggle('hidden', deviceMode !== 'mobile' || !running); chatUi.button.classList.toggle('hidden', !running); document.getElementById('touchCast').textContent = selectedWizard === 'hercules' ? 'PIĘŚĆ' : 'STRZAŁ'; document.getElementById('touchAbility').textContent = selectedWizard === 'illusionist' ? (p1.invisible ? 'ZAKOŃCZ E' : 'NIEWIDZIALNOŚĆ E') : 'GADŻET E'; const secondary = document.getElementById('touchSecondary'); secondary.classList.toggle('hidden', !wizard.secondaryAbilityType && !wizard.fullShield); secondary.textContent = wizard.secondaryAbilityType === 'teleport' ? 'TELEPORT Q' : wizard.secondaryAbilityType === 'eagle-heal' ? 'LECZ Q' : 'TARCZA Q'; }
+function updateDeviceControls() {
+  const wizard = wizards[selectedWizard];
+  const weaponLabel = document.querySelector('.weapon-card .label');
+  const weaponName = document.querySelector('.weapon-card strong');
+  weaponLabel.textContent = selectedWizard === 'napoleon' ? 'BROŃ' : 'SPELLBOOK';
+  weaponName.textContent = selectedWizard === 'napoleon' ? 'SZABLA' : 'ARCANE BOLT';
+  const primaryControl = document.querySelector('.controls-card div:nth-of-type(2) span');
+  if (primaryControl) primaryControl.textContent = selectedWizard === 'napoleon' ? 'SWING SABRE' : 'CAST SPELL';
+  document.getElementById('touchControls').classList.toggle('hidden', deviceMode !== 'mobile' || !running || spectatorMode);
+  chatUi.button.classList.toggle('hidden', !running);
+  document.getElementById('touchCast').textContent = selectedWizard === 'hercules' ? 'PIĘŚĆ' : selectedWizard === 'napoleon' ? 'SZABLA' : 'STRZAŁ';
+  document.getElementById('touchAbility').textContent = selectedWizard === 'illusionist' ? (p1.invisible ? 'ZAKOŃCZ E' : 'NIEWIDZIALNOŚĆ E') : selectedWizard === 'napoleon' ? 'TARCZA E' : 'GADŻET E';
+  const secondary = document.getElementById('touchSecondary');
+  secondary.classList.toggle('hidden', !wizard.secondaryAbilityType && !wizard.fullShield);
+  secondary.textContent = wizard.secondaryAbilityType === 'teleport' ? 'TELEPORT Q' : wizard.secondaryAbilityType === 'eagle-heal' ? 'LECZ Q' : wizard.secondaryAbilityType === 'sword-strike' ? 'CIĘCIE Q' : 'TARCZA Q';
+}
 function resetJoystick() { joystickX = 0; joystickY = 0; keys.KeyW = keys.KeyA = keys.KeyS = keys.KeyD = false; document.getElementById('joystickKnob').style.transform = 'translate(-50%, -50%)'; }
 function moveJoystick(event) { const joystick = document.getElementById('joystick'); const rect = joystick.getBoundingClientRect(); const dx = event.clientX - (rect.left + rect.width / 2); const dy = event.clientY - (rect.top + rect.height / 2); const radius = rect.width * .34; const distance = Math.hypot(dx, dy); const scale = distance > radius ? radius / distance : 1; joystickX = dx * scale / radius; joystickY = dy * scale / radius; document.getElementById('joystickKnob').style.transform = `translate(calc(-50% + ${joystickX * radius}px), calc(-50% + ${joystickY * radius}px))`; keys.KeyA = joystickX < -.2; keys.KeyD = joystickX > .2; keys.KeyW = joystickY < -.2; keys.KeyS = joystickY > .2; }
 function updateOrientationPrompt() { const portraitRequired = deviceMode === 'mobile' && matchMedia('(orientation: portrait) and (max-width: 1100px)').matches; const prompt = document.getElementById('rotatePrompt'); prompt.classList.toggle('show', portraitRequired); prompt.classList.toggle('landscape-required', portraitRequired); }
@@ -1018,6 +1167,20 @@ screen.orientation?.addEventListener?.('change', updateOrientationPrompt);
 function refreshPrimaryOpponent() { const opponents = [...remotePlayers.values()].filter(player => player.teamId !== teamId); if (!opponents.length) return; const nearest = opponents.reduce((best, player) => Math.hypot(player.x - p1.x, player.y - p1.y) < Math.hypot(best.x - p1.x, best.y - p1.y) ? player : best); Object.assign(p2, nearest); }
 function handleNetworkMessageV2(message) {
   if (message.type === 'career-state') { applyCareerState(message); return; }
+  if (message.type === 'wizard-granted' && message.wizardId === 'napoleon') {
+    const key = currentUser.toLowerCase();
+    const accounts = getAccounts();
+    if (accounts[key]) {
+      accounts[key].wizards = Array.from(new Set([...(accounts[key].wizards || []), 'napoleon']));
+      localStorage.setItem('arcanaAccounts', JSON.stringify(accounts));
+    }
+    const owned = getMap('arcanaOwned');
+    owned[key] = Array.from(new Set([...(owned[key] || []), 'napoleon']));
+    saveMap('arcanaOwned', owned);
+    updateShop();
+    setToast('NAPOLEON NADANY PRZEZ WŁAŚCICIELA');
+    return;
+  }
   if (message.type === 'friend-state') {
     const key = currentUser.toLowerCase();
     const friends = getMap('arcanaFriends');
@@ -1033,6 +1196,11 @@ function handleNetworkMessageV2(message) {
   if (message.type === 'friend-request-sent') {
     ui.inviteNick.value = '';
     ui.inviteMessage.textContent = `ZAPROSZENIE WYSŁANE DO ${message.targetNick}`;
+    return;
+  }
+  if (message.type === 'friend-request-rejected') {
+    ui.inviteNick.value = '';
+    ui.inviteMessage.textContent = `${message.targetNick} ODRZUCA ZAPROSZENIA DO ZNAJOMYCH`;
     return;
   }
   if (message.type === 'social-error') {
@@ -1065,7 +1233,7 @@ function handleNetworkMessageV2(message) {
   if (message.type === 'group-state') { groupId = message.groupId || ''; groupMembers = message.members || []; groupInviteUi.status.textContent = groupMembers.length > 1 ? `GRUPA: ${groupMembers.join(' + ')} // ${groupMembers.length}/3` : ''; updateFriends(); return; }
   if (message.type === 'group-invite') { pendingGroupInvite = message; groupInviteUi.text.textContent = `${message.from} ZAPRASZA CIĘ DO GRUPY`; groupInviteUi.modal.classList.remove('hidden'); return; }
   if (message.type === 'matched') {
-    rankedGameActive = message.ranked === true; randomQueued = false; randomQueueButton.textContent = 'LOSOWA GRA →'; onlineMatch = true; joined = true; teamId = message.teamId || `solo:${currentUser.toLowerCase()}`; opponentProfile = (message.opponents || [message.opponent].filter(Boolean))[0] || {}; matchRewardGranted = false; remotePlayers.clear();
+    rankedGameActive = message.ranked === true; randomQueued = false; randomQueueButton.textContent = 'LOSOWA GRA →'; onlineMatch = true; joined = true; spectatorMode = false; teamId = message.teamId || `solo:${currentUser.toLowerCase()}`; opponentProfile = (message.opponents || [message.opponent].filter(Boolean))[0] || {}; matchRewardGranted = false; remotePlayers.clear();
     (message.players || []).filter(player => player.nick?.toLowerCase() !== currentUser.toLowerCase()).forEach(player => remotePlayers.set(player.nick.toLowerCase(), { ...player, x: W * .73, y: H * .59, hp: 100, maxHp: 100, mana: 100, clones: [], color: '#ef7693', accent: '#ffe0e9', face: -1, cooldown: 0 }));
     if (!remotePlayers.size && message.opponent?.nick) remotePlayers.set(message.opponent.nick.toLowerCase(), { ...message.opponent, teamId: 'opponent', x: W * .73, y: H * .59, hp: 100, maxHp: 100, mana: 100, clones: [], color: '#ef7693', accent: '#ffe0e9', face: -1, cooldown: 0 });
     refreshPrimaryOpponent(); mode = 'player'; ui.join.textContent = message.ranked ? 'MECZ RANKINGOWY // 3 NA 3' : remotePlayers.size > 1 ? `MECZ DRUŻYNOWY // ${String(message.matchType || '2v2').replace('v', ' NA ')}` : 'PRZECIWNIK ZNALEZIONY // START'; if (!running) startGame('player'); return;
@@ -1073,7 +1241,7 @@ function handleNetworkMessageV2(message) {
   if (message.type === 'state') {
     const key = String(message.nick || '').toLowerCase(); if (!key || key === currentUser.toLowerCase()) return;
     const sameTeam = message.teamId === teamId; const player = remotePlayers.get(key) || { color: sameTeam ? '#ffb04b' : '#ef7693', accent: sameTeam ? '#fff0bd' : '#ffe0e9', face: sameTeam ? 1 : -1 };
-    player.nick = message.nick; player.teamId = message.teamId; player.x = (sameTeam ? message.x : 1 - message.x) * W; player.y = message.y * H; player.hp = message.hp; player.maxHp = message.maxHp || 100; player.mana = message.mana; player.invisible = message.invisible; player.damageReduction = message.damageReduction || 0; player.reflectShield = message.reflectShield || 0; player.clones = (message.clones || []).map(clone => ({ x: (sameTeam ? clone.x : 1 - clone.x) * W, y: clone.y * H, slot: clone.slot })); remotePlayers.set(key, player); refreshPrimaryOpponent(); return;
+    player.nick = message.nick; player.teamId = message.teamId; player.x = (sameTeam ? message.x : 1 - message.x) * W; player.y = message.y * H; player.hp = message.hp; player.maxHp = message.maxHp || 100; player.mana = message.mana; player.invisible = message.invisible; player.damageReduction = message.damageReduction || 0; player.reflectShield = message.reflectShield || 0; player.swordSwing = message.swordSwing || 0; player.swordAngle = message.swordAngle; player.clones = (message.clones || []).map(clone => ({ x: (sameTeam ? clone.x : 1 - clone.x) * W, y: clone.y * H, slot: clone.slot })); remotePlayers.set(key, player); refreshPrimaryOpponent(); updateSpectatorStatus(); return;
   }
   if (message.type === 'spell') {
     const incoming = message.spell; const owner = remotePlayers.get(String(message.ownerNick || '').toLowerCase()) || { ...p2, nick: message.ownerNick, teamId: message.teamId };
@@ -1081,14 +1249,21 @@ function handleNetworkMessageV2(message) {
     const sameTeam = message.teamId === teamId; spells.push({ ...incoming, x: (sameTeam ? incoming.x : 1 - incoming.x) * W, y: incoming.y * H, vx: (sameTeam ? incoming.vx : -incoming.vx) * W, vy: incoming.vy * H, owner, teamId: message.teamId }); return;
   }
   if (message.type === 'reflect') { spells.forEach(spell => { if (spell.id === message.id) spell.life = 0; }); const shot = message.spell; const owner = remotePlayers.get(String(message.reflector || '').toLowerCase()) || { ...p2, nick: message.reflector, teamId: 'opponent' }; spells.push({ ...shot, x: (1 - shot.x) * W, y: shot.y * H, vx: -shot.vx * W, vy: shot.vy * H, owner, teamId: owner.teamId }); return; }
-  if (message.type === 'damage') { if (!message.targetNick || message.targetNick.toLowerCase() === currentUser.toLowerCase()) { p1.hp -= message.amount; p1.stunTimer = Math.max(p1.stunTimer || 0, Number(message.stunDuration) || 0); if (p1.hp <= 0) endGame('GRACZ 2'); } else { const target = remotePlayers.get(message.targetNick.toLowerCase()); if (target) { target.hp -= message.amount; target.stunTimer = Math.max(target.stunTimer || 0, Number(message.stunDuration) || 0); } } return; }
+  if (message.type === 'damage') {
+    if (message.attackerNick && message.attackerNick.toLowerCase() !== currentUser.toLowerCase()) {
+      const attacker = remotePlayers.get(message.attackerNick.toLowerCase());
+      if (attacker) { attacker.swordAngle = Number(message.swordAngle); attacker.swordSwing = .24; }
+    }
+    if (!message.targetNick || message.targetNick.toLowerCase() === currentUser.toLowerCase()) { p1.hp -= message.amount; p1.stunTimer = Math.max(p1.stunTimer || 0, Number(message.stunDuration) || 0); if (p1.hp <= 0) handlePlayerDeath(); } else { const target = remotePlayers.get(message.targetNick.toLowerCase()); if (target) { target.hp -= message.amount; target.stunTimer = Math.max(target.stunTimer || 0, Number(message.stunDuration) || 0); } }
+    return;
+  }
   if (message.type === 'round-ended') {
     const won = message.winnerTeamId ? message.winnerTeamId === teamId : message.winnerNick?.toLowerCase() === currentUser.toLowerCase();
     if (won && !matchRewardGranted && opponentProfile.dropEnabled && keychains[opponentProfile.dropCharm]) { grantKeychain(opponentProfile.dropCharm); matchRewardGranted = true; setToast(`ZDOBYWASZ BRELOCZEK: ${keychains[opponentProfile.dropCharm].name}`); }
     if (running) { if (won) { const reward = window.applyMoneyMultiplier ? window.applyMoneyMultiplier(100) : 100; coins += reward; persistCoins(); ui.result.textContent = 'WYGRAŁEŚ!'; ui.result.classList.remove('hidden', 'loss'); ui.result.classList.add('win'); setToast(`+${reward} MONET ZA ZWYCIĘSTWO`); } else { coins = Math.max(0, coins - 50); persistCoins(); ui.result.textContent = 'PRZEGRAŁEŚ!'; ui.result.classList.remove('hidden', 'win'); ui.result.classList.add('loss'); } }
-    gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); ui.join.textContent = 'RUNDA ZAKOŃCZONA // DOŁĄCZ PONOWNIE'; updateDeviceControls(); if (matchSocket) sendNetwork({ type: 'leave-room' }); return;
+    gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; spectatorMode = false; remotePlayers.clear(); ui.start.classList.remove('hidden'); ui.join.textContent = 'RUNDA ZAKOŃCZONA // DOŁĄCZ PONOWNIE'; updateDeviceControls(); if (matchSocket) sendNetwork({ type: 'leave-room' }); return;
   }
-  if (message.type === 'opponent-left') { gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'PRZECIWNIK OPUŚCIŁ GRĘ'; updateDeviceControls(); setToast('PRZECIWNIK OPUŚCIŁ GRĘ'); }
+  if (message.type === 'opponent-left') { gameStartToken += 1; ui.reveal.classList.add('hidden'); onlineMatch = false; joined = false; running = false; spectatorMode = false; ui.start.classList.remove('hidden'); ui.join.textContent = 'PRZECIWNIK OPUŚCIŁ GRĘ'; updateDeviceControls(); setToast('PRZECIWNIK OPUŚCIŁ GRĘ'); }
 }
 const handleNetworkMessageWithGameOver = handleNetworkMessageV2;
 handleNetworkMessageV2 = function (message) {
@@ -1105,7 +1280,7 @@ joystick.addEventListener('pointerdown', event => { joystickPointer = event.poin
 joystick.addEventListener('pointermove', event => { if (event.pointerId === joystickPointer) moveJoystick(event); });
 joystick.addEventListener('pointerup', event => { if (event.pointerId === joystickPointer) { joystickPointer = null; resetJoystick(); } });
 joystick.addEventListener('pointercancel', resetJoystick);
-document.getElementById('touchCast').addEventListener('pointerdown', event => { event.preventDefault(); keys.Space = true; cast(p1, p2, p1.color); });
+document.getElementById('touchCast').addEventListener('pointerdown', event => { event.preventDefault(); keys.Space = true; const target = getHostileTargets().filter(player => player.hp > 0).sort((left, right) => Math.hypot(left.x - p1.x, left.y - p1.y) - Math.hypot(right.x - p1.x, right.y - p1.y))[0] || p2; cast(p1, target, p1.color); });
 document.getElementById('touchCast').addEventListener('pointerup', () => { keys.Space = false; });
 document.getElementById('touchCast').addEventListener('pointercancel', () => { keys.Space = false; });
 document.getElementById('touchAbility').addEventListener('pointerdown', event => { event.preventDefault(); useAbility(); });
@@ -1118,6 +1293,10 @@ addEventListener('keydown', event => {
 }, true);
 profileUi.button.addEventListener('click', openProfile);
 profileUi.close.addEventListener('click', () => profileUi.modal.classList.add('hidden'));
+profileUi.settingsButton.addEventListener('click', () => { const expanded = profileUi.settingsButton.getAttribute('aria-expanded') === 'true'; profileUi.settingsButton.setAttribute('aria-expanded', String(!expanded)); profileUi.settings.classList.toggle('hidden', expanded); });
+profileUi.language.addEventListener('change', () => updateLanguageSelection(profileUi.language.value));
+profileUi.theme.addEventListener('change', () => applyGameTheme(profileUi.theme.value));
+profileUi.rejectFriendRequests.addEventListener('change', () => saveFriendRequestPrivacy(profileUi.rejectFriendRequests.checked));
 document.getElementById('openRankingsButton').addEventListener('click', () => window.openRanking());
 profileUi.clear.addEventListener('click', () => profileUi.editor.getContext('2d').clearRect(0, 0, profileUi.editor.width, profileUi.editor.height));
 profileUi.save.addEventListener('click', saveAvatar);
@@ -1166,7 +1345,7 @@ ownerUi.password.addEventListener('input', () => { ownerPasswordVerified = false
 ownerUi.verifyPassword.addEventListener('click', verifyOwnerPassword);
 ownerUi.grantOctober.addEventListener('click', grantOctoberWizard);
 ownerUi.resetRanking.addEventListener('click', resetRankedLadder);
-addEventListener('resize', resize); addEventListener('keydown', e => { keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); resize(); reset(); updateShop(); requestAnimationFrame(frame);
+addEventListener('resize', resize); addEventListener('keydown', e => { if (spectatorMode) { keys[e.code] = false; if (e.code === 'Space') e.preventDefault(); return; } keys[e.code] = true; if (e.code === 'Space') e.preventDefault(); if (e.code === 'KeyE') useAbility(); if (e.code === 'KeyQ') useShield(); if (e.code === 'Enter') { joinPlayer(); if (!running && joined && mode === 'player') startGame('player'); } if (e.code === 'KeyR' && running) startGame(mode); }); addEventListener('keyup', e => { keys[e.code] = false; }); ui.shopButton.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.ownedButton.addEventListener('click', () => { ownedOnly = true; ui.shop.classList.remove('hidden'); closeWizard(); updateShop(); }); ui.shopClose.addEventListener('click', () => { ownedOnly = false; ui.shop.classList.add('hidden'); }); ui.shop.querySelectorAll('.wizard-card').forEach(card => card.addEventListener('click', () => openWizard(card.dataset.wizard))); document.getElementById('exitButton').addEventListener('click', closeWizard); ui.buy.addEventListener('click', () => buyWizard(viewedWizard)); ui.use.addEventListener('click', () => useWizard(viewedWizard)); applyGameTheme(localStorage.getItem('arcanaTheme')); updateLanguageSelection(localStorage.getItem('arcanaLanguage') || 'pl'); resize(); reset(); updateShop(); requestAnimationFrame(frame);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden') flushProgressSync();
 });
