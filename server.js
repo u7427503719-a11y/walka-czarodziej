@@ -35,7 +35,7 @@ const progressMapNames = [
   'arcanaEquipped', 'arcanaKeychainLevels', 'arcanaDropEnabled', 'arcanaDropCharm',
   'arcanaAvatars', 'arcanaMatchBlocked', 'arcanaHats', 'arcanaHatLevels',
   'arcanaEquippedHat', 'arcanaWizardWins', 'arcanaSelectedTitle', 'arcanaFriends',
-  'arcanaFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
+  'arcanaFriendRequests', 'arcanaRejectFriendRequests', 'arcanaBans', 'arcanaPlayerData', 'arcanaSkins', 'arcanaEquippedSkin'
 ];
 function readAccounts() {
   let contents;
@@ -575,11 +575,20 @@ async function handleOwnerRequest(request, response) {
   if (String(input.ownerNick || '').trim().toLowerCase() === restrictedOwnerNick) {
     sendJson(response, 403, { error: 'TA OPERACJA JEST NIEDOSTĘPNA DLA TEGO WŁAŚCICIELA' }); return;
   }
+  const wizardId = String(input.wizardId || 'october');
+  if (!['october', 'napoleon'].includes(wizardId)) {
+    sendJson(response, 400, { error: 'NIEPRAWIDŁOWY CZARODZIEJ' }); return;
+  }
   const targetEntry = findAccountEntry(accounts, input.targetNick);
   if (!targetEntry) { sendJson(response, 404, { error: 'NIE ISTNIEJE TAKIE KONTO' }); return; }
   const target = targetEntry[1];
-  target.wizards = Array.from(new Set([...(Array.isArray(target.wizards) ? target.wizards : []), 'october']));
+  target.wizards = Array.from(new Set([...(Array.isArray(target.wizards) ? target.wizards : []), wizardId]));
   writeAccounts(accounts);
+  const activeSocket = activeSocketsByNick.get(target.nick.toLowerCase());
+  if (activeSocket) {
+    activeSocket.grantedWizards = target.wizards;
+    send(activeSocket, { type: 'wizard-granted', wizardId });
+  }
   sendJson(response, 200, { account: publicAccount(target) });
 }
 
@@ -672,7 +681,11 @@ function finishRoom(socket, message) {
   room.forEach(player => { send(player, { type: 'round-ended', winnerNick, winnerTeamId }); player.room = ''; });
   rooms.delete(code);
 }
-function safeProfile(profile = {}) { return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', skinId: ['gold', 'spark', 'spring', 'monochrome'].includes(profile.skinId) ? profile.skinId : '', wizardId: /^(?:[a-z]+|limited-\d{4}-\d{2})$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice', title: String(profile.title || '').slice(0, 48) }; }
+function safeProfile(profile = {}, grantedWizards = []) {
+  let wizardId = /^(?:[a-z]+|limited-\d{4}-\d{2})$/.test(String(profile.wizardId || '')) ? String(profile.wizardId) : 'apprentice';
+  if (wizardId === 'napoleon' && !grantedWizards.includes('napoleon')) wizardId = 'apprentice';
+  return { role: ['owner', 'admin'].includes(profile.role) ? profile.role : 'user', dropEnabled: profile.dropEnabled === true, dropCharm: String(profile.dropCharm || ''), damageReduction: Math.max(0, Math.min(.8, Number(profile.damageReduction) || 0)), damageMultiplier: Math.max(.5, Math.min(4, Number(profile.damageMultiplier) || 1)), hatId: ['strength-hat', 'guard-hat', 'light-hat'].includes(profile.hatId) ? profile.hatId : '', skinId: ['gold', 'spark', 'spring', 'monochrome'].includes(profile.skinId) ? profile.skinId : '', wizardId, title: String(profile.title || '').slice(0, 48) };
+}
 function createMatch(firstParty, secondParty, code, matchType = '1v1', ranked = false) { const room = new Set([...firstParty.members, ...secondParty.members]); rooms.set(code, room); for (const party of [firstParty, secondParty]) for (const player of party.members) { player.room = code; player.teamId = party.id; player.rankedMatch = ranked; player.rankedQueueActive = false; } const participants = [...room].map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); for (const party of [firstParty, secondParty]) { const team = [...party.members]; const opponents = [...(party === firstParty ? secondParty : firstParty).members].map(player => ({ nick: player.nick, ...player.profile })); team.forEach(player => send(player, { type: 'matched', matchType, ranked, teamId: party.id, team: team.map(member => member.nick), opponents, opponent: opponents[0], players: participants })); } }
 function enqueueRandom(socket, requestedType = '1v1', ranked = false) { const queues = ranked ? rankedQueues : randomQueues; const matchType = ranked ? '3v3' : queues.has(requestedType) ? requestedType : '1v1'; if (socket.room || !socket.nick) { send(socket, { type: 'queue-error', message: 'NIE MOŻNA DOŁĄCZYĆ DO KOLEJKI' }); return; } removeFromQueue(socket); let party = socket.groupId ? groups.get(socket.groupId) : null; if (!party) party = { id: `solo:${socket.nick.toLowerCase()}`, members: new Set([socket]) }; const maxPartySize = matchType === '3v3' || matchType === '1v3' ? 3 : 2; if (party.members.size > maxPartySize || [...party.members].some(member => member.room)) { send(socket, { type: 'queue-error', message: 'GRUPA JEST ZA DUŻA LUB JEST JUŻ W MECZU' }); return; } if (ranked && party.members.size !== 3) { send(socket, { type: 'queue-error', message: 'RANKING 3 NA 3 WYMAGA PEŁNEJ DRUŻYNY TRZECH GRACZY' }); return; } if ([...party.members][0] !== socket) { send(socket, { type: 'queue-error', message: 'LIDER GRUPY URUCHAMIA DOPASOWYWANIE' }); return; } party.ranked = ranked; socket.rankedQueueActive = ranked; const queue = queues.get(matchType); const opponentIndex = queue.findIndex(candidate => { if (candidate.id === party.id || [...candidate.members].some(member => member.room)) return false; const sizes = [party.members.size, candidate.members.size].sort((left, right) => left - right); return matchType === '3v3' ? sizes[0] === 3 && sizes[1] === 3 : matchType === '2v2' ? sizes[0] === 2 && sizes[1] === 2 : matchType === '1v2' ? sizes[0] === 1 && sizes[1] === 2 : matchType === '1v3' ? sizes[0] === 1 && sizes[1] === 3 : sizes[0] === 1 && sizes[1] === 1; }); send(socket, { type: 'queue-waiting', matchType, teamSize: party.members.size, ranked }); if (opponentIndex < 0) { queue.push(party); return; } const [opponentParty] = queue.splice(opponentIndex, 1); createMatch(party, opponentParty, `random-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, matchType, ranked); }
 
@@ -701,7 +714,8 @@ webSocketServer.on('connection', socket => {
       }
       socket.sessionToken = token;
       socket.nick = accountEntry[1].nick;
-      socket.profile = safeProfile(message.profile);
+      socket.grantedWizards = Array.isArray(accountEntry[1].wizards) ? accountEntry[1].wizards : [];
+      socket.profile = safeProfile(message.profile, socket.grantedWizards);
       activeSocketsByNick.set(socket.nick.toLowerCase(), socket);
       send(socket, { type: 'hello', nick: socket.nick });
       sendFriendState(accountEntry[1]);
@@ -720,6 +734,19 @@ webSocketServer.on('connection', socket => {
       socket.close(1008, 'Session expired');
       return;
     }
+    if (message.type === 'friend-privacy') {
+      const accounts = readAccounts();
+      const accountEntry = findAccountEntry(accounts, socket.nick);
+      if (!accountEntry) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
+      const rejectRequests = message.rejectRequests === true;
+      setAccountProgressValue(accountEntry[1], 'arcanaRejectFriendRequests', rejectRequests);
+      if (rejectRequests) {
+        setAccountProgressValue(accountEntry[1], 'arcanaFriendRequests', []);
+      }
+      writeAccounts(accounts);
+      sendFriendState(accountEntry[1]);
+      return;
+    }
     if (message.type === 'friend-request') {
       const accounts = readAccounts();
       const senderEntry = findAccountEntry(accounts, socket.nick);
@@ -728,6 +755,10 @@ webSocketServer.on('connection', socket => {
       if (!targetEntry || targetEntry[0] === hiddenOwnerKey) { sendSocialError(socket, 'friend', 'NIE ISTNIEJE TAKIE KONTO'); return; }
       if (senderEntry[0] === targetEntry[0]) { sendSocialError(socket, 'friend', 'NIE MOŻESZ DODAĆ SIEBIE DO ZNAJOMYCH'); return; }
       if (areAccountFriends(senderEntry[1], targetEntry[1].nick)) { sendSocialError(socket, 'friend', 'TEN GRACZ JUŻ JEST ZNAJOMYM'); return; }
+      if (getAccountProgressValue(targetEntry[1], 'arcanaRejectFriendRequests') === true) {
+        send(socket, { type: 'friend-request-rejected', targetNick: targetEntry[1].nick });
+        return;
+      }
       const requests = accountFriendRequests(targetEntry[1]);
       if (requests.some(nick => String(nick).toLowerCase() === senderEntry[1].nick.toLowerCase())) {
         sendSocialError(socket, 'friend', 'ZAPROSZENIE JUŻ WYSŁANE');
@@ -798,7 +829,7 @@ webSocketServer.on('connection', socket => {
     }
     if (message.type === 'group-reject') { const group = groups.get(String(message.groupId || '')); group?.pendingInvites?.delete(socket); const inviter = activeSocketsByNick.get(String(message.from || '').toLowerCase()); if (inviter) send(inviter, { type: 'group-error', message: `${socket.nick || 'GRACZ'} ODRZUCIŁ ZAPROSZENIE` }); return; }
     if (message.type === 'group-leave') { const group = socket.groupId && groups.get(socket.groupId); if (group) { group.members.delete(socket); socket.groupId = ''; if (group.members.size < 2) { groups.delete(group.id); group.members.forEach(member => { member.groupId = ''; send(member, { type: 'group-state', groupId: '', members: [] }); }); } else group.members.forEach(member => send(member, groupState(group))); } return; }
-    if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile); if (socket.room) broadcast(rooms.get(socket.room), socket, { type: 'profile-update', nick: socket.nick, profile: socket.profile }); return; }
+    if (message.type === 'profile-update') { socket.profile = safeProfile(message.profile, socket.grantedWizards); if (socket.room) broadcast(rooms.get(socket.room), socket, { type: 'profile-update', nick: socket.nick, profile: socket.profile }); return; }
     if (message.type === 'chat' && socket.room) { const text = String(message.text || '').trim().slice(0, 120); if (text) broadcast(rooms.get(socket.room), null, { type: 'chat', nick: socket.nick, text }); return; }
     if (['career-get', 'career-win', 'daily-box-open'].includes(message.type)) {
       if (!socket.nick) return;
@@ -889,7 +920,7 @@ webSocketServer.on('connection', socket => {
       }
       return;
     }
-    if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile); enqueueRandom(socket, String(message.matchType || '1v1'), message.ranked === true); return; }
+    if (message.type === 'queue-random') { socket.profile = safeProfile(message.profile || socket.profile, socket.grantedWizards); enqueueRandom(socket, String(message.matchType || '1v1'), message.ranked === true); return; }
     if (message.type === 'queue-cancel') { socket.rankedQueueActive = false; removeFromQueue(socket); send(socket, { type: 'queue-cancelled' }); return; }
     if (message.type === 'bot-match-start') {
       const botMatchLimits = { bot: 1, 'bot-one-two': 2, 'bot-one-three': 3, 'bot-two-two': 2 };
@@ -926,7 +957,7 @@ webSocketServer.on('connection', socket => {
       room.add(socket);
       rooms.set(code, room);
       socket.room = code;
-      socket.profile = safeProfile(message.profile || socket.profile);
+      socket.profile = safeProfile(message.profile || socket.profile, socket.grantedWizards);
       send(socket, { type: 'waiting', code });
       if (room.size === 2) { const players = [...room]; players.forEach((player, index) => { player.teamId = `${code}:${index}`; }); const participants = players.map(player => ({ nick: player.nick, teamId: player.teamId, ...player.profile })); players.forEach((player, index) => { const opponent = { nick: players[1 - index].nick, ...players[1 - index].profile }; send(player, { type: 'matched', teamId: player.teamId, team: [player.nick], opponents: [opponent], opponent, players: participants }); }); }
       return;
