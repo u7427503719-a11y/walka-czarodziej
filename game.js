@@ -463,7 +463,7 @@ function updateRestrictedOwnerTools() {
   const canUseSpecialTools = !restricted && isOwner();
   ownerUi.grantOctober.closest('.owner-row')?.classList.toggle('hidden', !canUseSpecialTools);
   ownerUi.resetRanking.closest('.owner-row')?.classList.toggle('hidden', !canUseSpecialTools);
-  ownerUi.giveNapoleon.closest('.owner-row')?.classList.toggle('hidden', !isOwner());
+  ownerUi.giveNapoleon.classList.toggle('hidden', !isOwner());
   const overlordOption = ownerUi.wizard.querySelector('option[value="overlord"]');
   if (overlordOption) {
     overlordOption.hidden = restricted;
